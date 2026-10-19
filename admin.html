@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Arena 360 · Admin</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* Tableau de bord de régie : même identité qu'Arena 360, chiffres d'abord, détail ensuite */
+    :root {
+      --bg: #06070c; --bg-2: #0b0d16; --panel: #10131f; --panel-2: #161a2b; --line: #222843;
+      --text: #f2f4fb; --muted: #8d93ad; --dim: #5a6081;
+      --accent: #38d6ff; --views: #1b97c2; --visits: #e0457b; --live: #ff3b4f; --good: #3ddc84;
+      --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+      --body: "Manrope", "Segoe UI", system-ui, sans-serif;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: radial-gradient(700px 360px at 10% -8%, rgba(56,214,255,.13), transparent 70%), var(--bg); color: var(--text); font: 14px/1.5 var(--body); }
+    .wrap { max-width: 1180px; margin: 0 auto; padding-block: 22px 60px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+    header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+    header img { width: 44px; height: 44px; }
+    h1 { margin: 0; font: 900 34px/1 var(--display); letter-spacing: 1px; text-transform: uppercase; }
+    h1 small { font-size: 16px; color: var(--accent); letter-spacing: 2px; margin-left: 6px; }
+    .grow { flex: 1; }
+    .muted { color: var(--muted); }
+    button, select, input { font: inherit; color: inherit; }
+    .btn { padding: 9px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; font-weight: 600; }
+    .btn:hover { border-color: var(--accent); }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #050912; font: 800 16px/1 var(--display); letter-spacing: 1.2px; text-transform: uppercase; padding: 13px 18px; }
+    .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+    .seg button { padding: 8px 14px; border: 0; background: var(--panel); cursor: pointer; font-weight: 700; color: var(--muted); }
+    .seg button.on { background: var(--accent); color: #050912; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .login { max-width: 400px; margin: 8vh auto 0; padding: 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+    .login h2 { margin: 0 0 4px; font: 900 28px var(--display); text-transform: uppercase; }
+    .login form { display: grid; gap: 12px; margin-top: 16px; }
+    .login label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; color: var(--muted); }
+    .login input { padding: 11px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-2); outline: none; }
+    .login input:focus { border-color: var(--accent); }
+    .msg { padding: 10px 14px; border-radius: 8px; background: rgba(255,59,79,.1); border: 1px solid rgba(255,59,79,.4); color: #ff9aa5; margin-top: 12px; }
+
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .kpi { padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+    .kpi .lbl { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+    .kpi .val { font: 900 40px/1.05 var(--display); font-variant-numeric: tabular-nums; margin-top: 4px; }
+    .kpi .sub { font-size: 12px; color: var(--dim); }
+    .kpi.hero .val { color: var(--accent); }
+
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; min-width: 0; }
+    .card.wide { grid-column: 1 / -1; }
+    .card h3 { margin: 0; font: 900 20px var(--display); letter-spacing: .8px; text-transform: uppercase; }
+    .card .head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+    .chart { position: relative; overflow-x: auto; }
+    .chart svg { display: block; width: 100%; min-width: 560px; height: auto; }
+    .chart text { fill: var(--muted); font: 600 11px var(--body); }
+    .tip { position: absolute; pointer-events: none; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); font-size: 12px; white-space: nowrap; box-shadow: 0 8px 22px rgba(0,0,0,.4); opacity: 0; transition: opacity .1s; }
+    .tip b { font-variant-numeric: tabular-nums; }
+
+    .bars { display: grid; gap: 8px; }
+    .bar { display: grid; grid-template-columns: minmax(0, 150px) 1fr 54px; align-items: center; gap: 10px; font-size: 13px; }
+    .bar .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar .track { height: 12px; background: var(--bg-2); border-radius: 3px; overflow: hidden; }
+    .bar .fill { height: 100%; background: var(--views); border-radius: 0 4px 4px 0; }
+    .bar .n { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .bar .pct { color: var(--dim); font-weight: 600; font-size: 11px; margin-left: 4px; }
+    .empty { color: var(--dim); padding: 16px 0; }
+    details { margin-top: 10px; color: var(--muted); }
+    summary { cursor: pointer; font-size: 12px; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+    th, td { padding: 6px 8px; border-top: 1px solid var(--line); text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    .tipbox { margin-top: 18px; padding: 14px 16px; border-radius: 12px; border: 1px dashed var(--line); color: var(--muted); font-size: 13px; }
+    .tipbox code { color: var(--text); background: var(--bg-2); padding: 2px 6px; border-radius: 4px; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .bar { grid-template-columns: minmax(0, 110px) 1fr 48px; } h1 { font-size: 26px; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <img src="favicon.svg" alt="">
+      <h1>Arena 360 <small>Admin</small></h1>
+      <span class="grow"></span>
+      <div id="controls" hidden>
+        <div class="seg" id="period" role="group" aria-label="Période">
+          <button data-days="7">7 jours</button><button data-days="30" class="on">30 jours</button><button data-days="90">90 jours</button>
+        </div>
+        <button class="btn" id="refresh">Actualiser</button>
+        <button class="btn" id="logout">Déconnexion</button>
+      </div>
+    </header>
+    <main id="app"><p class="muted">Chargement…</p></main>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+  <script>
+  "use strict";
+  const C = window.ARENA_CONFIG;
+  const sb = window.supabase.createClient(C.supabaseUrl, C.supabaseAnonKey);
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmt = n => Number(n || 0).toLocaleString("fr-BE");
+  let days = 30, timer = null;
+
+  function loginView(err) {
+    $("#controls").hidden = true;
+    $("#app").innerHTML = `
+      <section class="login">
+        <h2>Connexion admin</h2>
+        <p class="muted">Utilise le même e-mail et le même mot de passe que ton compte du jeu « Je parie ».</p>
+        <form id="f">
+          <label>E-mail<input id="email" name="email" type="email" required autocomplete="email"></label>
+          <label>Mot de passe<input id="pass" name="password" type="password" required autocomplete="current-password"></label>
+          <button class="btn primary" type="submit">Se connecter</button>
+        </form>
+        ${err ? `<div class="msg">${esc(err)}</div>` : ""}
+      </section>`;
+    $("#f").addEventListener("submit", async e => {
+      e.preventDefault();
+      const { error } = await sb.auth.signInWithPassword({ email: $("#email").value, password: $("#pass").value });
+      if (error) return loginView(/invalid/i.test(error.message) ? "E-mail ou mot de passe incorrect." : error.message);
+      load();
+    });
+  }
+
+  async function load() {
+    clearTimeout(timer);
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return loginView();
+    $("#controls").hidden = false;
+    const { data, error } = await sb.rpc("arena_stats", { days });
+    if (error) {
+      $("#app").innerHTML = /admin/i.test(error.message)
+        ? `<div class="msg">Ce compte n'a pas les droits d'admin. Lance le script <b>supabase-admin.sql</b> dans Supabase (il te donne les droits).</div>`
+        : /arena_stats|function/i.test(error.message)
+          ? `<div class="msg">Les statistiques ne sont pas encore installées : lance le script <b>supabase-admin.sql</b> dans Supabase → SQL Editor.</div>`
+          : `<div class="msg">${esc(error.message)}</div>`;
+      return;
+    }
+    render(data);
+    timer = setTimeout(load, 60000);   // mise à jour toute seule chaque minute
+  }
+
+  function kpi(lbl, val, sub, hero) { return `<div class="kpi ${hero ? "hero" : ""}"><div class="lbl">${lbl}</div><div class="val">${val}</div>${sub ? `<div class="sub">${sub}</div>` : ""}</div>`; }
+  function bars(rows, key, total, empty) {
+    if (!rows.length || !total) return `<p class="empty">${empty}</p>`;
+    const max = Math.max(...rows.map(r => r.n));
+    return `<div class="bars">${rows.map(r => `
+      <div class="bar" title="${esc(r[key])} : ${fmt(r.n)}">
+        <span class="name">${esc(r[key])}</span>
+        <span class="track"><span class="fill" style="width:${Math.max(2, r.n / max * 100)}%"></span></span>
+        <span class="n">${fmt(r.n)}<span class="pct">${Math.round(r.n / total * 100)}%</span></span>
+      </div>`).join("")}</div>`;
+  }
+
+  function dailyChart(daily) {
+    const W = 900, H = 260, L = 40, R = 12, T = 14, B = 34;
+    const n = daily.length;
+    const max = Math.max(4, ...daily.map(d => +d.views));
+    const step = Math.pow(10, Math.floor(Math.log10(max)));
+    const nice = [1, 2, 2.5, 5, 10].map(k => k * step).find(v => max / v <= 5) || step * 10;
+    const top = Math.ceil(max / nice) * nice;
+    const y = v => T + (H - T - B) * (1 - v / top);
+    const bw = (W - L - R) / n;
+    const x = i => L + i * bw;
+    let g = "";
+    for (let v = 0; v <= top; v += nice) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#222843" stroke-width="1"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${fmt(v)}</text>`;
+    const labelEvery = Math.ceil(n / 10);
+    let bars = "", pts = [];
+    daily.forEach((d, i) => {
+      const bh = Math.max(0, y(0) - y(+d.views));
+      const w = Math.max(2, bw - 2);
+      bars += `<rect x="${x(i) + 1}" y="${y(+d.views)}" width="${w}" height="${bh}" rx="${Math.min(4, w / 2)}" fill="#1b97c2"/>`;
+      pts.push(`${x(i) + bw / 2},${y(+d.visits)}`);
+      if (i % labelEvery === 0 || i === n - 1) {
+        const dt = new Date(d.day + "T12:00");
+        bars += `<text x="${x(i) + bw / 2}" y="${H - 12}" text-anchor="middle">${dt.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}</text>`;
+      }
+    });
+    const line = `<polyline points="${pts.join(" ")}" fill="none" stroke="#e0457b" stroke-width="2" stroke-linejoin="round"/>` +
+      daily.map((d, i) => `<circle cx="${x(i) + bw / 2}" cy="${y(+d.visits)}" r="4" fill="#e0457b" stroke="#10131f" stroke-width="2"/>`).join("");
+    const hits = daily.map((d, i) => `<rect class="hit" data-i="${i}" x="${x(i)}" y="${T}" width="${bw}" height="${H - T - B}" fill="transparent"/>`).join("");
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Vues et visites par jour">${g}${bars}${line}<line id="cross" x1="0" x2="0" y1="${T}" y2="${y(0)}" stroke="#8d93ad" stroke-dasharray="3 3" opacity="0"/>${hits}</svg>`;
+  }
+
+  function render(s) {
+    const days_ = s.days;
+    const ppv = s.total_visits ? (s.total_views / s.total_visits).toFixed(1).replace(".", ",") : "–";
+    const dev = s.by_device || {};
+    const devRows = [["mobile", "Téléphone"], ["tablet", "Tablette"], ["desktop", "Ordinateur"]].map(([k, n]) => ({ name: n, n: dev[k] || 0 })).filter(r => r.n);
+    const totalVisitsBySrc = (s.by_source || []).reduce((a, r) => a + r.n, 0);
+    const hours = Array.from({ length: 24 }, (_, h) => ({ name: `${h} h`, n: (s.by_hour || []).find(r => r.h === h)?.n || 0 }));
+    const busiest = hours.reduce((a, b) => b.n > a.n ? b : a, hours[0]);
+    $("#app").innerHTML = `
+      <div class="kpis">
+        ${kpi("Vues aujourd'hui", fmt(s.today_views), `${fmt(s.today_visits)} visite${s.today_visits > 1 ? "s" : ""}`, true)}
+        ${kpi(`Vues · ${days_} jours`, fmt(s.total_views), `${fmt(Math.round(s.total_views / days_))} par jour en moyenne`)}
+        ${kpi(`Visites · ${days_} jours`, fmt(s.total_visits), `${ppv} pages par visite`)}
+        ${kpi("Depuis le début", fmt(s.all_time_views), "vues au total")}
+        ${kpi("Joueurs inscrits", fmt(Math.max(s.players.velo, s.players.foot)), `${fmt(s.players.velo)} vélo · ${fmt(s.players.foot)} foot`)}
+      </div>
+      <div class="grid">
+        <section class="card wide">
+          <div class="head"><h3>Vues et visites par jour</h3><span class="grow"></span>
+            <div class="legend"><span><i style="background:#1b97c2"></i>Vues</span><span><i style="background:#e0457b"></i>Visites</span></div></div>
+          <div class="chart" id="daily">${dailyChart(s.daily)}<div class="tip" id="tip"></div></div>
+          <details><summary>Voir en tableau</summary>
+            <table><thead><tr><th>Jour</th><th>Vues</th><th>Visites</th></tr></thead>
+            <tbody>${[...s.daily].reverse().map(d => `<tr><td>${new Date(d.day + "T12:00").toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" })}</td><td>${fmt(d.views)}</td><td>${fmt(d.visits)}</td></tr>`).join("")}</tbody></table>
+          </details>
+        </section>
+        <section class="card"><div class="head"><h3>D'où viennent les visiteurs</h3><span class="muted">visites</span></div>
+          ${bars((s.by_source || []).filter(r => r.n), "source", totalVisitsBySrc, "Pas encore de visite.")}</section>
+        <section class="card"><div class="head"><h3>Sections les plus vues</h3><span class="muted">vues</span></div>
+          ${bars(s.by_section || [], "section", s.total_views, "Pas encore de vue.")}</section>
+        <section class="card"><div class="head"><h3>Appareils</h3><span class="muted">vues</span></div>
+          ${bars(devRows, "name", s.total_views, "Pas encore de vue.")}
+          ${s.installed_views ? `<p class="muted" style="margin:10px 0 0">${fmt(s.installed_views)} vues depuis l'appli installée sur l'écran d'accueil.</p>` : ""}</section>
+        <section class="card"><div class="head"><h3>Heures de visite</h3><span class="muted">${busiest.n ? `pic à ${busiest.name}` : ""}</span></div>
+          ${bars(hours.filter(h => h.n), "name", s.total_views, "Pas encore de vue.")}</section>
+      </div>
+      <div class="tipbox">
+        Astuce Instagram : mets ce lien dans ta bio pour voir exactement combien de visites viennent de tes pubs :
+        <code>https://arena.eraz.ovh/?src=insta</code><br>
+        Mis à jour tout seul chaque minute · dernière lecture à ${new Date(s.generated_at).toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" })}.
+        Aucune donnée personnelle n'est enregistrée (ni cookie, ni adresse IP).
+      </div>`;
+    // survol du graphique : ligne verticale + détail du jour
+    const box = $("#daily"), tip = $("#tip"), cross = box.querySelector("#cross"), svg = box.querySelector("svg");
+    box.querySelectorAll(".hit").forEach(h => {
+      h.addEventListener("mouseenter", () => {
+        const d = s.daily[+h.dataset.i];
+        const cx = +h.getAttribute("x") + +h.getAttribute("width") / 2;
+        cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("opacity", 1);
+        tip.innerHTML = `<div>${new Date(d.day + "T12:00").toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}</div><div><b>${fmt(d.views)}</b> vues · <b>${fmt(d.visits)}</b> visites</div>`;
+        const r = svg.getBoundingClientRect(), bx = box.getBoundingClientRect();
+        const px = r.left - bx.left + box.scrollLeft + cx / 900 * r.width;
+        tip.style.left = Math.min(px + 12, box.scrollWidth - tip.offsetWidth - 4) + "px";
+        tip.style.top = "10px";
+        tip.style.opacity = 1;
+      });
+    });
+    svg.addEventListener("mouseleave", () => { tip.style.opacity = 0; cross.setAttribute("opacity", 0); });
+  }
+
+  $("#period").addEventListener("click", e => {
+    const b = e.target.closest("[data-days]"); if (!b) return;
+    days = +b.dataset.days;
+    document.querySelectorAll("#period button").forEach(x => x.classList.toggle("on", x === b));
+    load();
+  });
+  $("#refresh").addEventListener("click", load);
+  $("#logout").addEventListener("click", async () => { await sb.auth.signOut(); loginView(); });
+  load();
+  </script>
+</body>
+</html>

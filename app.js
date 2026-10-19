@@ -128,6 +128,54 @@ async function pool(items, n, fn) {
   return out;
 }
 
+// ---------- statistiques de visites (anonymes : ni cookie, ni IP, ni identifiant ; lisibles seulement par l'admin)
+const TRACK = (() => {
+  const C = window.ARENA_CONFIG || {};
+  const off = !C.supabaseUrl || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  const ss = { get: k => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch {} } };
+  const ua = navigator.userAgent;
+  const device = /iPad|Tablet/i.test(ua) || (/Android/i.test(ua) && !/Mobile/i.test(ua)) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? "tablet"
+    : /Mobi|iPhone|Android/i.test(ua) ? "mobile" : "desktop";
+  const installed = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  function visitSource() {
+    const p = new URLSearchParams(location.search);
+    const tag = (p.get("src") || p.get("utm_source") || "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 30);
+    if (tag) return tag === "ig" || tag === "insta" ? "instagram" : tag;
+    if (installed) return "appli installée";
+    let host = "";
+    try { host = document.referrer ? new URL(document.referrer).hostname.replace(/^www\./, "") : ""; } catch {}
+    if (!host || host === location.hostname) return "direct";
+    const known = [["instagram", "instagram"], ["facebook", "facebook"], ["fb.", "facebook"], ["google", "google"], ["bing", "bing"],
+      ["tiktok", "tiktok"], ["youtube", "youtube"], ["snapchat", "snapchat"], ["whatsapp", "whatsapp"], ["t.co", "x / twitter"], ["twitter", "x / twitter"], ["duckduckgo", "duckduckgo"]];
+    const k = known.find(([s]) => host.includes(s));
+    return k ? k[1] : host.slice(0, 40);
+  }
+  let source = ss.get("arena-src");
+  const firstOfVisit = !source;
+  if (!source) { source = visitSource(); ss.set("arena-src", source); }
+  let sentFirst = !firstOfVisit, last = "", lastAt = 0;
+  return function track(section) {
+    if (off || !section) return;
+    const now = Date.now();
+    if (section === last && now - lastAt < 30000) return;   // pas de doublon quand on reclique au même endroit
+    last = section; lastAt = now;
+    const body = { section: section.slice(0, 40), device, source, first_view: !sentFirst, installed };
+    sentFirst = true;
+    fetch(`${C.supabaseUrl}/rest/v1/page_views`, {
+      method: "POST", keepalive: true,
+      headers: { apikey: C.supabaseAnonKey, Authorization: `Bearer ${C.supabaseAnonKey}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify(body),
+    }).catch(() => {});
+  };
+})();
+window.arenaTrack = TRACK;
+function footSection(v) {
+  if (v === "today") return "Foot · matchs du jour";
+  if (v === "goals") return "Foot · plus beaux buts";
+  const l = BY_SLUG[v];
+  return !l ? "Foot" : l.g === "d1" ? "Foot · championnats" : l.g === "cup" ? "Foot · coupes nationales" : l.g === "nat" ? "Foot · sélections" : "Foot · coupes d'Europe";
+}
+
 // ---------------------------------------------------------------- horloge
 function tick() { $("#clock").textContent = new Date().toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
 tick(); setInterval(tick, 1000);
@@ -141,6 +189,7 @@ function setSport(sp) {
   $("#velo").classList.toggle("hidden", sp !== "velo");
   $("#jeu").classList.toggle("hidden", sp !== "jeu");
   store.set("sport", sp);
+  arenaTrack(sp === "velo" ? "Cyclisme" : sp === "jeu" ? `Je parie · ${store.get("jeu-mode", "velo") === "foot" ? "foot" : "vélo"}` : footSection(state.view));
   if (sp === "velo" && !$("#velo-main").innerHTML) renderCycling();
   if (sp === "jeu") { const go = () => window.ArenaGame.renderGame(); window.ArenaGame ? go() : window.addEventListener("DOMContentLoaded", go, { once: true }); }
   window.scrollTo(0, 0);
@@ -209,6 +258,7 @@ $("#league-list").addEventListener("click", e => {
 $("#league-search").addEventListener("input", e => { state.filter = e.target.value; renderSidebar(); });
 
 function openView(v, sub = 0) {
+  arenaTrack(footSection(v));
   state.view = v;
   state.sub = sub;
   state.tab = "results";
@@ -861,6 +911,7 @@ function stageWinner(w) {
   return `${w.nat ? cflag(w.nat) : ""}<span>${esc(w.name)}</span>`;
 }
 function openRace(key) {
+  arenaTrack("Cyclisme · fiche course");
   const [k, i] = key.split(":");
   const r = window.CYCLING.__prepped[k][+i];
   if (!r?.stages) return;
@@ -941,6 +992,7 @@ const STAT_ALIASES = { possessionPct: ["Possession"], totalShots: ["SHOTS", "Sho
   accuratePasses: ["Accurate Passes"], passPct: ["Pass Completion %"], totalTackles: ["Tackles"], totalClearance: ["Clearances"] };
 
 function openMatch(league, id) {
+  arenaTrack("Foot · fiche match");
   mc.league = league; mc.id = id; mc.data = null;
   let m = $("#match-modal");
   if (!m) {
@@ -1451,3 +1503,4 @@ if (savedView !== "today" && BY_SLUG[savedView]) state.view = savedView;
 renderSidebar();
 renderFoot();
 if (["velo", "jeu"].includes(store.get("sport", "foot"))) setSport(store.get("sport"));
+else arenaTrack(footSection(state.view));

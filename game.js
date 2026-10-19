@@ -551,6 +551,7 @@ async function onGameClick(e) {
   const gm = t.closest("[data-gmode]");
   if (gm) {
     game.mode = gm.dataset.gmode; store.set("jeu-mode", game.mode); game.msg = null;
+    arenaTrack(`Je parie · ${game.mode === "foot" ? "foot" : "vélo"}`);
     drawGame();
     if (game.me && game.mode === "foot") FootGame.init();
     return;
