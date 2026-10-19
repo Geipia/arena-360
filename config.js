@@ -3,8 +3,8 @@
    lance le script supabase-setup.sql, puis colle ici l'URL du projet et la clé « anon public »
    (Project Settings → API). Tant que ces deux lignes sont vides, le jeu fonctionne en mode local sur ce PC. */
 window.ARENA_CONFIG = {
-  supabaseUrl: "",          // ex. "https://abcdefgh.supabase.co"
-  supabaseAnonKey: "",      // ex. "eyJhbGciOiJIUzI1NiIs..."
+  supabaseUrl: "https://ljlshnxllwrgkrhqtyth.supabase.co",
+  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqbHNobnhsbHdyZ2tyaHF0eXRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0MDU0ODYsImV4cCI6MjEwNzk4MTQ4Nn0.90tbSczln_Y7i-5I99fpLPIWa8Uln-O_lasdGAFImJs",   // clé publique « anon » : sans danger, les règles de sécurité protègent les équipes
 
   season: 2027,             // saison jouée
   budget: 500,              // budget de départ (points fictifs)
