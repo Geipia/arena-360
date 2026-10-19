@@ -394,7 +394,8 @@ function drawGame() {
 
   if (!game.me) {
     const signup = game.authMode === "signup";
-    main.innerHTML = modeSwitchHTML() + hero + msg + `
+    const foot = game.mode === "foot" ? FootGame.loggedOut() : null;
+    main.innerHTML = modeSwitchHTML() + (foot ? foot.hero : hero) + msg + `
       <section class="auth">
         <div class="auth-card">
           <div class="auth-tabs">
@@ -412,11 +413,11 @@ function drawGame() {
           <p class="hint">${ONLINE ? "Ton e-mail sert seulement à te reconnecter. Les autres joueurs voient uniquement ton pseudo." : "Mode local : les équipes restent sur ce PC. Le code évite qu'un autre joueur modifie ton équipe."}</p>
         </div>
         <div class="auth-preview">
-          <div class="mp-title">Les coureurs les plus chers</div>
-          <div class="mini-cards">${m.list.slice(0, 3).map(r => riderCard(r, { compact: true, canAdd: null })).join("")}</div>
+          <div class="mp-title">${foot ? foot.previewTitle : "Les coureurs les plus chers"}</div>
+          <div class="mini-cards">${foot ? foot.preview : m.list.slice(0, 3).map(r => riderCard(r, { compact: true, canAdd: null })).join("")}</div>
         </div>
       </section>
-      ${rulesHTML()}`;
+      ${foot ? foot.rules : rulesHTML()}`;
     return;
   }
 

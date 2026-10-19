@@ -304,18 +304,8 @@ async function refreshFootPlayers() {
   footDraw();
 }
 
-function footDraw() {
-  const main = $("#jeu-main");
-  if (game.mode !== "foot") return;
-  const mk = FMARKET;
-  if (!mk || !fg.me) { main.innerHTML = modeSwitchHTML() + `<div class="loading"><div class="spinner"></div>Chargement des équipes de toute l'Europe…</div>`; return; }
-  const cost = fg.draft.reduce((s, id) => s + priceOf(id), 0);
-  const left = FOOT.budget - cost;
-  const dirty = JSON.stringify(fg.draft) !== JSON.stringify(fg.me.teams || []);
-  const mine = fg.scores.get(fg.me.id);
-  const changesLeft = FOOT.maxChanges - (fg.me.changes || 0);
-
-  const hero = `
+function footHeroHTML(mine = null, changesLeft = FOOT.maxChanges) {
+  return `
     <section class="g-hero foot">
       <div class="g-hero-text">
         <div class="eyebrow">Jeu · saison ${FOOT.season}</div>
@@ -331,6 +321,42 @@ function footDraw() {
         <div class="mode">${ONLINE ? "🌐 Classement en ligne" : "💻 Mode local · ce PC"}</div>
       </div>
     </section>`;
+}
+function footRulesHTML(mk) {
+  return `
+      <section class="rules">
+        <div class="section-title"><h2>Règles</h2></div>
+        <ul class="rule-list">
+          <li><b>${FOOT.size} équipes</b> parmi ${mk.leagues.length} championnats européens (première division), avec <b>${FOOT.budget} points</b> de budget.</li>
+          <li>Le jeu démarre au <b>mercato de janvier</b> : les points comptent du 1er janvier 2027 au ${FOOT.end.toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}. Avant, tu peux changer tes équipes sans limite.</li>
+          <li>Ensuite, tu as <b>${FOOT.maxChanges} changements</b>. Une équipe retirée garde les points déjà gagnés, une nouvelle équipe compte à partir du jour où tu la prends.</li>
+          <li>Pour les championnats lus sur Wikipédia (Pologne, Croatie, Serbie, Ukraine…), les points de championnat sont calculés à partir du classement, et les matchs de coupe d'Europe viennent d'ESPN. Leurs coupes nationales ne sont pas comptées.</li>
+          <li>Toutes les compétitions officielles comptent : championnat, coupes d'Europe, coupes nationales. Les matchs amicaux non.</li>
+          <li>Une victoire aux tirs au but compte comme une victoire.</li>
+        </ul>
+        <div class="section-title"><h2>Barème</h2></div>
+        <div class="table-wrap"><table class="race-table bareme">
+          <thead><tr><th>Compétition</th><th>Victoire</th><th>Nul</th></tr></thead>
+          <tbody>${FBAREME.map(b => `<tr><td>${esc(b.label)}</td><td>${b.w}</td><td>${b.d}</td></tr>`).join("")}
+            <tr><td>En tête de son championnat (chaque lundi, s'il y a eu des matchs dans la semaine)</td><td colspan="2">+${LEADER_PTS}</td></tr>
+            <tr><td>Champion (en tête le ${FOOT.end.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })})</td><td colspan="2">+${CHAMPION_PTS}</td></tr>
+          </tbody>
+        </table></div>
+      </section>`;
+}
+
+function footDraw() {
+  const main = $("#jeu-main");
+  if (game.mode !== "foot") return;
+  const mk = FMARKET;
+  if (!mk || !fg.me) { main.innerHTML = modeSwitchHTML() + `<div class="loading"><div class="spinner"></div>Chargement des équipes de toute l'Europe…</div>`; return; }
+  const cost = fg.draft.reduce((s, id) => s + priceOf(id), 0);
+  const left = FOOT.budget - cost;
+  const dirty = JSON.stringify(fg.draft) !== JSON.stringify(fg.me.teams || []);
+  const mine = fg.scores.get(fg.me.id);
+  const changesLeft = FOOT.maxChanges - (fg.me.changes || 0);
+
+  const hero = footHeroHTML(mine, changesLeft);
   const msg = fg.msg ? `<div class="g-msg ${fg.msg.err ? "err" : "ok"}">${esc(fg.msg.t)}</div>` : "";
   const tabs = `
     <nav class="tabs g-tabs">
@@ -408,26 +434,7 @@ function footDraw() {
           <div class="rk-pts"><b>${s}</b><small>pts</small></div>
         </li>`).join("")}</ol>` : `<div class="empty">Personne n'a encore choisi d'équipes. Lance-toi !</div>`}`;
   } else {
-    body = `
-      <section class="rules">
-        <div class="section-title"><h2>Règles</h2></div>
-        <ul class="rule-list">
-          <li><b>${FOOT.size} équipes</b> parmi ${mk.leagues.length} championnats européens (première division), avec <b>${FOOT.budget} points</b> de budget.</li>
-          <li>Le jeu démarre au <b>mercato de janvier</b> : les points comptent du 1er janvier 2027 au ${FOOT.end.toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}. Avant, tu peux changer tes équipes sans limite.</li>
-          <li>Ensuite, tu as <b>${FOOT.maxChanges} changements</b>. Une équipe retirée garde les points déjà gagnés, une nouvelle équipe compte à partir du jour où tu la prends.</li>
-          <li>Pour les championnats lus sur Wikipédia (Pologne, Croatie, Serbie, Ukraine…), les points de championnat sont calculés à partir du classement, et les matchs de coupe d'Europe viennent d'ESPN. Leurs coupes nationales ne sont pas comptées.</li>
-          <li>Toutes les compétitions officielles comptent : championnat, coupes d'Europe, coupes nationales. Les matchs amicaux non.</li>
-          <li>Une victoire aux tirs au but compte comme une victoire.</li>
-        </ul>
-        <div class="section-title"><h2>Barème</h2></div>
-        <div class="table-wrap"><table class="race-table bareme">
-          <thead><tr><th>Compétition</th><th>Victoire</th><th>Nul</th></tr></thead>
-          <tbody>${FBAREME.map(b => `<tr><td>${esc(b.label)}</td><td>${b.w}</td><td>${b.d}</td></tr>`).join("")}
-            <tr><td>En tête de son championnat (chaque lundi, s'il y a eu des matchs dans la semaine)</td><td colspan="2">+${LEADER_PTS}</td></tr>
-            <tr><td>Champion (en tête le ${FOOT.end.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })})</td><td colspan="2">+${CHAMPION_PTS}</td></tr>
-          </tbody>
-        </table></div>
-      </section>`;
+    body = footRulesHTML(mk);
   }
   main.innerHTML = modeSwitchHTML() + hero + msg + tabs + body;
 }
@@ -464,4 +471,15 @@ function footInput(e) {
   return false;
 }
 
-window.FootGame = { init: footInit, draw: footDraw, onClick: footClick, onInput: footInput, footScore, applyFootTeams, loadFootMarket };
+/* éléments du jeu foot affichés avant la connexion */
+function footLoggedOut() {
+  if (!FMARKET) { loadFootMarket().then(() => { if (game.mode === "foot" && !game.me) drawGame(); }); }
+  const mk = FMARKET;
+  return {
+    hero: footHeroHTML(),
+    previewTitle: "Les équipes les plus chères",
+    preview: mk ? mk.list.slice(0, 3).map(t => teamCard(t, { compact: true })).join("") : `<div class="loading"><div class="spinner"></div>Chargement des équipes…</div>`,
+    rules: mk ? footRulesHTML(mk) : "",
+  };
+}
+window.FootGame = { loggedOut: footLoggedOut, init: footInit, draw: footDraw, onClick: footClick, onInput: footInput, footScore, applyFootTeams, loadFootMarket };
