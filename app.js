@@ -1,0 +1,1379 @@
+/* ARENA — résultats foot (API ESPN, temps réel) + palmarès cyclisme 2026 */
+"use strict";
+
+const API = "https://site.api.espn.com/apis/site/v2/sports/soccer";
+const API_STD = "https://site.api.espn.com/apis/v2/sports/soccer";
+
+// ---------------------------------------------------------------- compétitions
+const LEAGUES = [
+  // Championnats — première division
+  { s: "bel.1", n: "Jupiler Pro League", c: "Belgique", f: "be", g: "d1" },
+  { s: "eng.1", n: "Premier League", c: "Angleterre", f: "gb-eng", g: "d1" },
+  { s: "esp.1", n: "LaLiga", c: "Espagne", f: "es", g: "d1" },
+  { s: "fra.1", n: "Ligue 1", c: "France", f: "fr", g: "d1" },
+  { s: "ita.1", n: "Serie A", c: "Italie", f: "it", g: "d1" },
+  { s: "ger.1", n: "Bundesliga", c: "Allemagne", f: "de", g: "d1" },
+  { s: "ned.1", n: "Eredivisie", c: "Pays-Bas", f: "nl", g: "d1" },
+  { s: "por.1", n: "Liga Portugal", c: "Portugal", f: "pt", g: "d1" },
+  { s: "tur.1", n: "Süper Lig", c: "Turquie", f: "tr", g: "d1" },
+  { s: "sco.1", n: "Premiership", c: "Écosse", f: "gb-sct", g: "d1" },
+  { s: "aut.1", n: "Bundesliga", c: "Autriche", f: "at", g: "d1" },
+  { s: "sui.1", n: "Super League", c: "Suisse", f: "ch", g: "d1" },
+  { s: "gre.1", n: "Super League", c: "Grèce", f: "gr", g: "d1" },
+  { s: "den.1", n: "Superliga", c: "Danemark", f: "dk", g: "d1" },
+  { s: "nor.1", n: "Eliteserien", c: "Norvège", f: "no", g: "d1" },
+  { s: "swe.1", n: "Allsvenskan", c: "Suède", f: "se", g: "d1" },
+  { s: "cze.1", n: "Chance Liga", c: "Tchéquie", f: "cz", g: "d1" },
+  { s: "rou.1", n: "SuperLiga", c: "Roumanie", f: "ro", g: "d1" },
+  { s: "rus.1", n: "Premier Liga", c: "Russie", f: "ru", g: "d1" },
+  { s: "cyp.1", n: "First Division", c: "Chypre", f: "cy", g: "d1" },
+  { s: "isr.1", n: "Ligat ha'Al", c: "Israël", f: "il", g: "d1" },
+  { s: "irl.1", n: "Premier Division", c: "Irlande", f: "ie", g: "d1" },
+  { s: "fin.1", n: "Veikkausliiga", c: "Finlande", f: "fi", g: "d1" },
+  { s: "wal.1", n: "Cymru Premier", c: "Pays de Galles", f: "gb-wls", g: "d1" },
+  { s: "nir.1", n: "Premiership", c: "Irlande du Nord", f: "gb-nir", g: "d1" },
+  { s: "mlt.1", n: "Premier League", c: "Malte", f: "mt", g: "d1" },
+  // Coupes d'Europe (les qualifications sont dans la compétition, onglet « Qualifications »)
+  { s: "uefa.champions", n: "Ligue des Champions", c: "UEFA", f: "eu", g: "euro", sub: [["uefa.champions", "Phase principale"], ["uefa.champions_qual", "Qualifications"]] },
+  { s: "uefa.europa", n: "Europa League", c: "UEFA", f: "eu", g: "euro", sub: [["uefa.europa", "Phase principale"], ["uefa.europa_qual", "Qualifications"]] },
+  { s: "uefa.europa.conf", n: "Conference League", c: "UEFA", f: "eu", g: "euro", sub: [["uefa.europa.conf", "Phase principale"], ["uefa.europa.conf_qual", "Qualifications"]] },
+  { s: "uefa.super_cup", n: "Supercoupe d'Europe", c: "UEFA", f: "eu", g: "euro" },
+  { s: "fifa.cwc", n: "Coupe du monde des clubs", c: "FIFA", i: "🌍", g: "euro" },
+  // Sélections nationales
+  { s: "fifa.world", n: "Coupe du Monde", c: "FIFA", i: "🏆", g: "nat", sub: [
+    ["fifa.world", "Phase finale"], ["fifa.worldq.uefa", "Qualifs Europe"], ["fifa.worldq.caf", "Qualifs Afrique"],
+    ["fifa.worldq.conmebol", "Qualifs Amérique du Sud"], ["fifa.worldq.concacaf", "Qualifs CONCACAF"], ["fifa.worldq.afc", "Qualifs Asie"],
+    ["fifa.worldq.ofc", "Qualifs Océanie"], ["fifa.wcq.ply", "Barrages intercontinentaux"]] },
+  { s: "uefa.euro", n: "Euro", c: "UEFA", f: "eu", g: "nat", sub: [["uefa.euro", "Phase finale"], ["uefa.euroq", "Qualifications"]] },
+  { s: "uefa.nations", n: "Ligue des Nations", c: "UEFA", f: "eu", g: "nat" },
+  { s: "caf.nations", n: "Coupe d'Afrique (CAN)", c: "CAF", i: "🌍", g: "nat", sub: [["caf.nations", "Phase finale"], ["caf.nations_qual", "Qualifications"]] },
+  { s: "conmebol.america", n: "Copa América", c: "CONMEBOL", i: "🌎", g: "nat" },
+  { s: "concacaf.gold", n: "Gold Cup", c: "CONCACAF", i: "🌎", g: "nat", sub: [["concacaf.gold", "Phase finale"], ["concacaf.gold_qual", "Qualifications"]] },
+  { s: "afc.asian.cup", n: "Coupe d'Asie", c: "AFC", i: "🌏", g: "nat", sub: [["afc.asian.cup", "Phase finale"], ["afc.cupq", "Qualifications"]] },
+  { s: "global.finalissima", n: "Finalissima", c: "UEFA-CONMEBOL", i: "🏆", g: "nat" },
+  { s: "fifa.olympics", n: "Jeux olympiques", c: "FIFA", i: "🏅", g: "nat" },
+  { s: "fifa.friendly", n: "Matchs amicaux", c: "International", i: "🤝", g: "nat" },
+  // Coupes nationales — "w:" = lue sur Wikipédia ({S} = saison 2026–27, {Y} = année)
+  { s: "w:bel", n: "Croky Cup", c: "Belgique", f: "be", g: "cup", wiki: "{S} Belgian Cup" },
+  { s: "w:belsc", n: "Supercoupe de Belgique", c: "Belgique", f: "be", g: "cup", wiki: "{Y} Belgian Super Cup" },
+  { s: "eng.fa", n: "FA Cup", c: "Angleterre", f: "gb-eng", g: "cup", sub: [["eng.fa", "Tours principaux"], ["eng.fa_qual", "Tours préliminaires"]] },
+  { s: "eng.league_cup", n: "Carabao Cup", c: "Angleterre", f: "gb-eng", g: "cup" },
+  { s: "eng.charity", n: "Community Shield", c: "Angleterre", f: "gb-eng", g: "cup" },
+  { s: "esp.copa_del_rey", n: "Copa del Rey", c: "Espagne", f: "es", g: "cup" },
+  { s: "esp.super_cup", n: "Supercopa", c: "Espagne", f: "es", g: "cup" },
+  { s: "fra.coupe_de_france", n: "Coupe de France", c: "France", f: "fr", g: "cup" },
+  { s: "fra.super_cup", n: "Trophée des Champions", c: "France", f: "fr", g: "cup" },
+  { s: "ita.coppa_italia", n: "Coppa Italia", c: "Italie", f: "it", g: "cup" },
+  { s: "ita.super_cup", n: "Supercoppa", c: "Italie", f: "it", g: "cup" },
+  { s: "ger.dfb_pokal", n: "DFB-Pokal", c: "Allemagne", f: "de", g: "cup" },
+  { s: "ger.super_cup", n: "Supercup", c: "Allemagne", f: "de", g: "cup" },
+  { s: "ned.cup", n: "KNVB Beker", c: "Pays-Bas", f: "nl", g: "cup" },
+  { s: "ned.supercup", n: "Johan Cruijff Schaal", c: "Pays-Bas", f: "nl", g: "cup" },
+  { s: "por.taca.portugal", n: "Taça de Portugal", c: "Portugal", f: "pt", g: "cup" },
+  { s: "sco.tennents", n: "Scottish Cup", c: "Écosse", f: "gb-sct", g: "cup", sub: [["sco.tennents", "Tours principaux"], ["sco.tennents_qual", "Tours préliminaires"]] },
+  { s: "sco.cis", n: "League Cup", c: "Écosse", f: "gb-sct", g: "cup" },
+  { s: "w:tur", n: "Coupe de Turquie", c: "Turquie", f: "tr", g: "cup", wiki: "{S} Turkish Cup" },
+  { s: "w:gre", n: "Coupe de Grèce", c: "Grèce", f: "gr", g: "cup", wiki: "{S} Greek Football Cup" },
+  { s: "w:aut", n: "ÖFB-Cup", c: "Autriche", f: "at", g: "cup", wiki: "{S} Austrian Cup" },
+  { s: "w:pol", n: "Puchar Polski", c: "Pologne", f: "pl", g: "cup", wiki: "{S} Polish Cup" },
+  { s: "w:cze", n: "Coupe de Tchéquie", c: "Tchéquie", f: "cz", g: "cup", wiki: "{S} Czech Cup" },
+  { s: "w:cro", n: "Coupe de Croatie", c: "Croatie", f: "hr", g: "cup", wiki: "{S} Croatian Football Cup" },
+  { s: "w:ukr", n: "Coupe d'Ukraine", c: "Ukraine", f: "ua", g: "cup", wiki: "{S} Ukrainian Cup" },
+  { s: "w:rus", n: "Coupe de Russie", c: "Russie", f: "ru", g: "cup", wiki: "{S} Russian Cup" },
+  { s: "w:rou", n: "Cupa României", c: "Roumanie", f: "ro", g: "cup", wiki: "{S} Cupa României" },
+  { s: "w:hun", n: "Magyar Kupa", c: "Hongrie", f: "hu", g: "cup", wiki: "{S} Magyar Kupa" },
+  { s: "w:bul", n: "Coupe de Bulgarie", c: "Bulgarie", f: "bg", g: "cup", wiki: "{S} Bulgarian Cup" },
+  { s: "w:cyp", n: "Coupe de Chypre", c: "Chypre", f: "cy", g: "cup", wiki: "{S} Cypriot Cup" },
+  { s: "w:isr", n: "Coupe d'Israël", c: "Israël", f: "il", g: "cup", wiki: "{S} Israel State Cup" },
+  { s: "w:nor", n: "Coupe de Norvège", c: "Norvège", f: "no", g: "cup", wiki: "{S} Norwegian Football Cup" },
+  { s: "w:swe", n: "Svenska Cupen", c: "Suède", f: "se", g: "cup", wiki: "{S} Svenska Cupen" },
+  { s: "w:fin", n: "Coupe de Finlande", c: "Finlande", f: "fi", g: "cup", wiki: "{Y} Finnish Cup" },
+  { s: "w:irl", n: "FAI Cup", c: "Irlande", f: "ie", g: "cup", wiki: "{Y} FAI Cup" },
+  { s: "w:nir", n: "Irish Cup", c: "Irlande du Nord", f: "gb-nir", g: "cup", wiki: "{S} Irish Cup" },
+  { s: "w:wal", n: "Welsh Cup", c: "Pays de Galles", f: "gb-wls", g: "cup", wiki: "{S} Welsh Cup" },
+];
+const GROUPS = { d1: "Championnats · Division 1", euro: "Coupes d'Europe & clubs", nat: "Sélections nationales", cup: "Coupes nationales" };
+const BY_SLUG = Object.fromEntries(LEAGUES.map(l => [l.s, l]));
+
+// ---------------------------------------------------------------- utils
+const $ = (sel, el = document) => el.querySelector(sel);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad = n => String(n).padStart(2, "0");
+const ymd = d => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+const ym = d => `${d.getFullYear()}${pad(d.getMonth() + 1)}`;
+const flagImg = (iso, cls = "flag") => iso ? `<img class="${cls}" src="https://flagcdn.com/w40/${iso}.png" alt="" loading="lazy">` : "";
+const fmtDay = d => d.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" });
+const fmtTime = d => d.toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" });
+const sameDay = (a, b) => ymd(a) === ymd(b);
+
+const store = {
+  get(k, def) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+
+const cache = new Map();
+async function getJSON(url, ttl = 60000) {
+  const hit = cache.get(url);
+  if (hit && Date.now() - hit.t < ttl) return hit.p;
+  const p = fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+  cache.set(url, { t: Date.now(), p });
+  p.catch(() => cache.delete(url));
+  return p;
+}
+async function pool(items, n, fn) {
+  const out = new Array(items.length); let i = 0;
+  await Promise.all(Array.from({ length: n }, async () => {
+    while (i < items.length) { const k = i++; try { out[k] = await fn(items[k]); } catch { out[k] = null; } }
+  }));
+  return out;
+}
+
+// ---------------------------------------------------------------- horloge
+function tick() { $("#clock").textContent = new Date().toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
+tick(); setInterval(tick, 1000);
+
+// ---------------------------------------------------------------- switch sport
+document.querySelectorAll(".sport-btn").forEach(b => b.addEventListener("click", () => setSport(b.dataset.sport)));
+function setSport(sp) {
+  document.body.dataset.sport = sp;
+  document.querySelectorAll(".sport-btn").forEach(b => b.classList.toggle("active", b.dataset.sport === sp));
+  $("#foot").classList.toggle("hidden", sp !== "foot");
+  $("#velo").classList.toggle("hidden", sp !== "velo");
+  $("#jeu").classList.toggle("hidden", sp !== "jeu");
+  store.set("sport", sp);
+  if (sp === "velo" && !$("#velo-main").innerHTML) renderCycling();
+  if (sp === "jeu") { const go = () => window.ArenaGame.renderGame(); window.ArenaGame ? go() : window.addEventListener("DOMContentLoaded", go, { once: true }); }
+  window.scrollTo(0, 0);
+}
+$("#menu-fab").addEventListener("click", () => $("#foot-sidebar").classList.toggle("open"));
+
+// ================================================================= FOOTBALL
+const state = {
+  view: "today",              // "today" | slug
+  day: new Date(),
+  month: null,
+  tab: "results",
+  sub: 0,                     // index de la sous-compétition (ex. qualifications)
+  favs: store.get("favs", ["bel.1", "uefa.champions"]),
+  filter: "",
+  logos: store.get("logos", {}),
+};
+let refreshTimer = null;
+
+function leagueIcon(l) {
+  if (state.logos[l.s]) return `<img src="${state.logos[l.s]}" alt="">`;
+  if (l.f) return flagImg(l.f, "flag");
+  return `<span>${l.i || "⚽"}</span>`;
+}
+
+function renderSidebar() {
+  const q = state.filter.toLowerCase();
+  const match = l => !q || (l.n + " " + l.c).toLowerCase().includes(q);
+  const item = l => `
+    <button class="league-item ${state.view === l.s ? "active" : ""}" data-slug="${l.s}">
+      <span class="ico">${l.f ? flagImg(l.f) : `<span>${l.i}</span>`}</span>
+      <span class="lname">${esc(l.n)}<span class="lcountry">${esc(l.c)}</span></span>
+      <span class="star ${state.favs.includes(l.s) ? "on" : ""}" data-star="${l.s}" title="Favori">★</span>
+    </button>`;
+  let html = `
+    <button class="league-item today-item ${state.view === "today" ? "active" : ""}" data-slug="today">
+      <span class="ico">📅</span><span class="lname">Tous les matchs du jour<span class="lcountry">Toutes compétitions</span></span>
+    </button>
+    <button class="league-item today-item ${state.view === "goals" ? "active" : ""}" data-slug="goals">
+      <span class="ico">🎬</span><span class="lname">Plus beaux buts<span class="lcountry">Vidéos des derniers matchs</span></span>
+    </button>`;
+  const favs = state.favs.map(s => BY_SLUG[s]).filter(Boolean).filter(match);
+  if (favs.length) html += `<div class="group-title">★ Favoris</div>` + favs.map(item).join("");
+  for (const [g, title] of Object.entries(GROUPS)) {
+    const ls = LEAGUES.filter(l => l.g === g && match(l));
+    if (ls.length) html += `<div class="group-title">${title}</div>` + ls.map(item).join("");
+  }
+  $("#league-list").innerHTML = html;
+}
+
+$("#league-list").addEventListener("click", e => {
+  const star = e.target.closest("[data-star]");
+  if (star) {
+    e.stopPropagation();
+    const s = star.dataset.star;
+    state.favs = state.favs.includes(s) ? state.favs.filter(x => x !== s) : [...state.favs, s];
+    store.set("favs", state.favs);
+    renderSidebar();
+    return;
+  }
+  const it = e.target.closest("[data-slug]");
+  if (!it) return;
+  openView(it.dataset.slug);
+  $("#foot-sidebar").classList.remove("open");
+});
+$("#league-search").addEventListener("input", e => { state.filter = e.target.value; renderSidebar(); });
+
+function openView(v, sub = 0) {
+  state.view = v;
+  state.sub = sub;
+  state.tab = "results";
+  state.month = null;
+  store.set("view", v);
+  renderSidebar();
+  renderFoot();
+  window.scrollTo(0, 0);
+}
+
+// ---------- parsing ESPN
+function parseEvent(e, league = null) {
+  const c = e.competitions[0];
+  const st = e.status.type;
+  const side = h => {
+    const x = c.competitors.find(t => t.homeAway === h) || {};
+    return {
+      id: x.team?.id, name: x.team?.shortDisplayName || x.team?.displayName || "?",
+      full: x.team?.displayName, logo: x.team?.logo, score: x.score, winner: x.winner,
+      pen: x.shootoutScore,
+    };
+  };
+  const home = side("home"), away = side("away");
+  const events = (c.details || []).filter(d => d.scoringPlay || d.redCard || d.yellowCard).map(d => ({
+    team: d.team?.id === home.id ? "h" : "a",
+    min: d.clock?.displayValue || "",
+    who: d.athletesInvolved?.[0]?.shortName || d.athletesInvolved?.[0]?.displayName || "",
+    goal: d.scoringPlay, red: d.redCard, yellow: d.yellowCard && !d.redCard,
+    pk: d.penaltyKick, og: d.ownGoal, shootout: d.shootout,
+  })).filter(x => !x.shootout);
+  let label, cls = "";
+  if (st.state === "in") {
+    cls = "live";
+    label = st.name === "STATUS_HALFTIME" ? "Mi-temps" : (e.status.displayClock || st.shortDetail);
+  } else if (st.state === "post") {
+    label = { STATUS_FULL_TIME: "Terminé", STATUS_FINAL_AET: "Ap. prol.", STATUS_FINAL_PEN: "T.A.B.", STATUS_POSTPONED: "Reporté", STATUS_CANCELED: "Annulé", STATUS_ABANDONED: "Arrêté" }[st.name]
+      || (st.shortDetail === "FT" ? "Terminé" : st.shortDetail === "AET" ? "Ap. prol." : st.shortDetail);
+  } else {
+    label = st.name === "STATUS_POSTPONED" ? "Reporté" : fmtTime(new Date(e.date));
+  }
+  const notes = (c.notes || []).map(n => n.headline).filter(Boolean).join(" · ");
+  return { id: e.id, league, date: new Date(e.date), state: st.state, statusName: st.name, label, cls, home, away, events, venue: c.venue?.fullName, notes };
+}
+
+function matchHTML(m) {
+  const played = m.state !== "pre" && m.home.score != null && !["STATUS_POSTPONED", "STATUS_CANCELED"].includes(m.statusName);
+  const res = side => !played || m.state !== "post" ? "" : (m[side].winner ? "win" : (m.home.winner || m.away.winner) ? "lose" : "");
+  const score = played
+    ? `<div class="score ${m.cls}"><span class="box">${esc(m.home.score)}</span><span class="box">${esc(m.away.score)}</span></div>`
+    : `<div class="score pre">${m.state === "pre" ? esc(m.label) : "–"}</div>`;
+  const pen = m.home.pen != null && m.away.pen != null ? `<div class="note">Tirs au but : ${m.home.pen} – ${m.away.pen}</div>` : "";
+  const ev = side => m.events.filter(x => x.team === side).map(x => {
+    const icon = x.goal ? "⚽" : x.red ? `<i class="card-r"></i>` : `<i class="card-y"></i>`;
+    const extra = x.goal ? (x.pk ? " (pén.)" : x.og ? " (c.s.c.)" : "") : "";
+    return `<div class="${side} ev">${side === "h" ? `${esc(x.who)}${extra} ${esc(x.min)} ${icon}` : `${icon} ${esc(x.min)} ${esc(x.who)}${extra}`}</div>`;
+  }).join("");
+  const details = `
+    <div class="details">
+      <div>${ev("h") || ""}</div><div class="mid">${m.events.length ? "" : "—"}</div><div>${ev("a") || ""}</div>
+      ${m.notes ? `<div class="venue">${esc(m.notes)}</div>` : ""}
+      <div class="venue">${m.venue ? "🏟 " + esc(m.venue) + " · " : ""}${m.date ? fmtDay(m.date) + (m.noTime ? "" : " " + fmtTime(m.date)) : ""}</div>
+    </div>`;
+  return `
+    <div class="match" data-id="${m.id}" ${m.league ? `data-league="${m.league}"` : ""}>
+      <div class="status ${m.cls}">${m.state === "pre" ? "À venir" : esc(m.label)}</div>
+      <div class="team home ${res("home")}"><span class="tn" title="${esc(m.home.full)}">${esc(m.home.name)}</span>${m.home.logo ? `<img src="${m.home.logo}" alt="" loading="lazy">` : ""}</div>
+      ${score}
+      <div class="team away ${res("away")}">${m.away.logo ? `<img src="${m.away.logo}" alt="" loading="lazy">` : ""}<span class="tn" title="${esc(m.away.full)}">${esc(m.away.name)}</span></div>
+      <div class="chev">›</div>
+      ${pen}
+      ${details}
+    </div>`;
+}
+
+$("#foot-main").addEventListener("click", e => {
+  const m = e.target.closest(".match");
+  if (m && m.dataset.league) openMatch(m.dataset.league, m.dataset.id);   // fiche complète (ESPN)
+  else if (m) m.classList.toggle("open");                                // coupes Wikipédia : détail sur place
+});
+
+const loadingHTML = (txt = "Chargement des résultats…") => `<div class="loading"><div class="spinner"></div>${txt}</div>`;
+
+function renderFoot() {
+  clearInterval(refreshTimer);
+  if (state.view === "today") renderToday(); else if (state.view === "goals") renderGoals(); else renderLeague();
+}
+
+// ---------- vue "matchs du jour"
+async function renderToday(silent = false) {
+  const main = $("#foot-main");
+  const d = state.day;
+  const isToday = sameDay(d, new Date());
+  if (!silent) main.innerHTML = `
+    <div class="page-head">
+      <div><h1>Matchs du jour</h1><div class="sub">Toutes les compétitions européennes et internationales</div></div>
+      <div class="grow"></div>
+      <div class="nav-row">
+        <button class="nav-btn" data-day="-1" aria-label="Jour précédent">‹</button>
+        <div class="nav-label">${isToday ? "Aujourd'hui" : fmtDay(d)}</div>
+        <button class="nav-btn" data-day="1" aria-label="Jour suivant">›</button>
+        ${isToday ? "" : `<button class="pill-today" data-day="0">Aujourd'hui</button>`}
+      </div>
+    </div>
+    <div id="today-body">${loadingHTML(`Chargement de ${LEAGUES.length} compétitions…`)}</div>`;
+
+  const key = ymd(d);
+  // une entrée par flux : compétition principale, ses qualifications, et la Croky Cup (Wikipédia)
+  const order = [];
+  for (const s of [...state.favs, ...LEAGUES.map(l => l.s).filter(s => !state.favs.includes(s))]) {
+    const l = BY_SLUG[s];
+    if (!l) continue;
+    if (l.wiki) { if (TODAY_WIKI.includes(l.s)) order.push({ l, wiki: true }); continue; }
+    (l.sub || [[l.s, null]]).forEach(([slug, name], i) => order.push({ l, slug, name, i }));
+  }
+  const results = await pool(order, 10, o => o.wiki
+    ? loadWikiCup(o.l).then(r => ({ wiki: r }))
+    : getJSON(`${API}/${o.slug}/scoreboard?dates=${key}`, isToday ? 30000 : 300000));
+  if (state.view !== "today" || ymd(state.day) !== key) return;
+
+  const blocks = [];
+  let total = 0, live = 0, done = 0, goals = 0;
+  order.forEach((o, i) => {
+    const data = results[i];
+    let ms;
+    if (o.wiki) ms = (data?.wiki?.matches || []).filter(m => m.date && ymd(m.date) === key).map(wikiToMatch);
+    else {
+      if (!data?.events?.length) return;
+      if (!o.i) rememberLogo(o.l.s, data);
+      ms = data.events.map(e => parseEvent(e, o.slug));
+    }
+    if (!ms.length) return;
+    ms.sort((a, b) => a.date - b.date);
+    total += ms.length;
+    ms.forEach(m => {
+      if (m.state === "in") live++;
+      if (m.state === "post") done++;
+      if (m.state !== "pre") goals += (+m.home.score || 0) + (+m.away.score || 0);
+    });
+    blocks.push(compBlock(o.l, ms, o.wiki ? null : data, o.name, o.i || 0));
+  });
+  const body = $("#today-body");
+  if (!body) return;
+  body.innerHTML = total ? `
+    <div class="summary-row">
+      <div class="stat"><b>${total}</b><span>matchs</span></div>
+      <div class="stat"><b style="color:var(--live)">${live}</b><span>en direct</span></div>
+      <div class="stat"><b>${done}</b><span>terminés</span></div>
+      <div class="stat"><b>${goals}</b><span>buts marqués</span></div>
+      <div class="stat"><b>${blocks.length}</b><span>compétitions</span></div>
+    </div>${blocks.join("")}`
+    : `<div class="empty">Aucun match ce jour-là dans les compétitions suivies.<br>Utilise les flèches pour changer de date.</div>`;
+  if (isToday) refreshTimer = setTimeout(() => renderToday(true), live ? 30000 : 120000);
+}
+
+function compBlock(l, ms, data, subName, subIdx = 0) {
+  const logo = data?.leagues?.[0]?.logos?.[0]?.href || state.logos[l.s];
+  return `
+    <div class="comp-block">
+      <div class="comp-head" data-open="${l.s}" data-sub="${subIdx}">
+        ${logo ? `<img src="${logo}" alt="">` : l.f ? flagImg(l.f) : l.i}
+        <span>${esc(l.c)} · ${esc(l.n)}${subIdx ? ` <span class="sub-lbl">${esc(subName)}</span>` : ""}</span>
+        <span class="cnt">${ms.length} match${ms.length > 1 ? "s" : ""} ›</span>
+      </div>
+      <div class="matches">${ms.map(matchHTML).join("")}</div>
+    </div>`;
+}
+
+function rememberLogo(s, data) {
+  const logo = data?.leagues?.[0]?.logos?.[0]?.href;
+  if (logo && state.logos[s] !== logo) { state.logos[s] = logo; store.set("logos", state.logos); }
+}
+
+$("#foot-main").addEventListener("click", e => {
+  const dBtn = e.target.closest("[data-day]");
+  if (dBtn) {
+    const n = +dBtn.dataset.day;
+    state.day = n === 0 ? new Date() : new Date(state.day.getFullYear(), state.day.getMonth(), state.day.getDate() + n);
+    renderFoot();
+  }
+  const open = e.target.closest("[data-open]");
+  if (open) openView(open.dataset.open, +(open.dataset.sub || 0));
+  const subBtn = e.target.closest("[data-subidx]");
+  if (subBtn) { state.sub = +subBtn.dataset.subidx; state.month = null; renderLeague(); }
+  const mBtn = e.target.closest("[data-month]");
+  if (mBtn) {
+    const n = +mBtn.dataset.month;
+    state.month = new Date(state.month.getFullYear(), state.month.getMonth() + n, 1);
+    renderLeague();
+  }
+  const tab = e.target.closest("[data-tab]");
+  if (tab) { state.tab = tab.dataset.tab; renderLeague(); }
+});
+
+// ---------- vue compétition
+async function renderLeague(silent = false) {
+  const l = BY_SLUG[state.view];
+  if (l.wiki) return renderWikiCup(l);
+  const slug = l.sub ? l.sub[state.sub]?.[0] || l.s : l.s;
+  const main = $("#foot-main");
+  if (!silent) main.innerHTML = `
+    <div class="page-head">
+      ${state.logos[l.s] ? `<img class="logo" src="${state.logos[l.s]}" alt="">` : ""}
+      <div><h1>${esc(l.n)}</h1><div class="sub" id="league-sub">${l.f ? flagImg(l.f) : ""} ${esc(l.c)}</div></div>
+    </div>
+    <div class="tabs">
+      <button class="tab ${state.tab === "results" ? "active" : ""}" data-tab="results">Résultats & calendrier</button>
+      <button class="tab ${state.tab === "table" ? "active" : ""}" data-tab="table">Classement</button>
+    </div>
+    ${l.sub ? `<div class="subtabs">${l.sub.map(([, n], i) => `<button class="chip ${state.sub === i ? "on" : ""}" data-subidx="${i}">${esc(n)}</button>`).join("")}</div>` : ""}
+    <div id="league-body">${loadingHTML()}</div>`;
+  if (state.tab === "table") return renderStandings(l, slug);
+
+  // mois initial : mois courant ; s'il est vide (compétition terminée/à venir), on saute au mois du dernier/prochain match
+  if (!state.month) {
+    const now = new Date();
+    state.month = new Date(now.getFullYear(), now.getMonth(), 1);
+    try {
+      const cur = await getJSON(`${API}/${slug}/scoreboard?dates=${ym(state.month)}`);
+      if (!cur.events?.length) {
+        const def = await getJSON(`${API}/${slug}/scoreboard`);
+        const dt = def.events?.[0] && new Date(def.events[0].date);
+        if (dt) state.month = new Date(dt.getFullYear(), dt.getMonth(), 1);
+      }
+    } catch {}
+  }
+  const key = ym(state.month);
+  let data;
+  try { data = await getJSON(`${API}/${slug}/scoreboard?dates=${key}`); }
+  catch { $("#league-body").innerHTML = `<div class="empty">Impossible de charger les données. Vérifie ta connexion.</div>`; return; }
+  if (state.view !== l.s || state.tab !== "results" || ym(state.month) !== key || (l.sub && l.sub[state.sub][0] !== slug)) return;
+  if (slug === l.s) rememberLogo(l.s, data);
+  const season = data.leagues?.[0]?.season?.displayName;
+  const sub = $("#league-sub");
+  if (sub && season) sub.innerHTML = `${l.f ? flagImg(l.f) : ""} ${esc(l.c)} · ${esc(season)}`;
+  const head = $(".page-head");
+  if (head && !head.querySelector(".logo") && state.logos[l.s]) head.insertAdjacentHTML("afterbegin", `<img class="logo" src="${state.logos[l.s]}" alt="">`);
+
+  const ms = (data.events || []).map(e => parseEvent(e, slug)).sort((a, b) => a.date - b.date);
+  const byDay = new Map();
+  ms.forEach(m => { const k = ymd(m.date); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(m); });
+  const monthName = state.month.toLocaleDateString("fr-BE", { month: "long", year: "numeric" });
+  const live = ms.some(m => m.state === "in");
+  // journées jouées (la plus récente en premier), puis journées à venir
+  const days = [...byDay.values()];
+  const played = days.filter(list => list.some(m => m.state !== "pre"));
+  const upcoming = days.filter(list => list.every(m => m.state === "pre"));
+  const sectionHTML = (title, list) => !list.length ? "" : `
+    <div class="section-title" style="margin:8px 0 14px"><h2>${title}</h2></div>
+    ${list.map(dl => `
+      <div class="day-block">
+        <div class="day-title">${fmtDay(dl[0].date)}</div>
+        <div class="comp-block"><div class="matches">${dl.map(matchHTML).join("")}</div></div>
+      </div>`).join("")}`;
+  $("#league-body").innerHTML = `
+    <div class="nav-row" style="margin-bottom:18px">
+      <button class="nav-btn" data-month="-1" aria-label="Mois précédent">‹</button>
+      <div class="nav-label">${monthName}</div>
+      <button class="nav-btn" data-month="1" aria-label="Mois suivant">›</button>
+      <span style="color:var(--muted);font-size:13px;margin-left:8px">${ms.length} match${ms.length > 1 ? "s" : ""}</span>
+    </div>
+    ${ms.length ? sectionHTML("Résultats", played.reverse()) + sectionHTML("À venir", upcoming)
+      : `<div class="empty">Aucun match en ${monthName}.</div>`}`;
+  if (live) refreshTimer = setTimeout(() => renderLeague(true), 30000);
+}
+
+// ---------- coupes lues sur Wikipédia (Croky Cup, coupes de Turquie, Grèce, Pologne…)
+const TODAY_WIKI = ["w:bel"];          // affichées aussi dans « Matchs du jour »
+const WIKI_API = "https://en.wikipedia.org/w/api.php?action=parse&format=json&formatversion=2&redirects=1&prop=wikitext&origin=*&page=";
+const wikiCache = new Map();
+function wikiTitles(tpl) {
+  const now = new Date(), y = now.getFullYear();
+  const start = now.getMonth() >= 6 ? y : y - 1;
+  const season = a => `${a}–${String((a + 1) % 100).padStart(2, "0")}`;
+  return tpl.includes("{S}")
+    ? [tpl.replace("{S}", season(start)), tpl.replace("{S}", season(start - 1))]
+    : [tpl.replace("{Y}", y), tpl.replace("{Y}", y - 1)];
+}
+async function loadWikiCup(l) {
+  const hit = wikiCache.get(l.s);
+  if (hit && Date.now() - hit.t < 600000) return hit.r;
+  for (const title of wikiTitles(l.wiki)) {
+    try {
+      const d = await getJSON(WIKI_API + encodeURIComponent(title), 600000);
+      if (!d.parse?.wikitext) continue;
+      const r = { ...WikiCups.parse(d.parse.wikitext), title: d.parse.title };
+      wikiCache.set(l.s, { t: Date.now(), r });
+      return r;
+    } catch {}
+  }
+  return null;
+}
+const ROUND_FR = [
+  [/quarter[- ]?finals?/i, "Quarts de finale"], [/semi[- ]?finals?/i, "Demi-finales"], [/^final$/i, "Finale"], [/^match$/i, "Finale"],
+  [/round of 64/i, "32es de finale"], [/round of 32/i, "16es de finale"], [/round of 16/i, "8es de finale"],
+  [/\bfirst\b/i, "1er"], [/\bsecond\b/i, "2e"], [/\bthird\b/i, "3e"], [/\bfourth\b/i, "4e"], [/\bfifth\b/i, "5e"], [/\bsixth\b/i, "6e"],
+  [/\bseventh\b/i, "7e"], [/\beighth\b/i, "8e"], [/\bninth\b/i, "9e"], [/qualifying round/i, "tour qualificatif"], [/qualifying/i, "qualifs"],
+  [/preliminary round/i, "Tour préliminaire"], [/\bround\b/i, "tour"], [/\bgroup\b/i, "Groupe"], [/matchday/i, "Journée"],
+  [/\bnorth\b/i, "Nord"], [/\bsouth\b/i, "Sud"], [/first leg/i, "aller"], [/second leg/i, "retour"],
+];
+const roundFr = r => { let x = r || "Matchs"; for (const [a, b] of ROUND_FR) x = x.replace(a, b); return x.charAt(0).toUpperCase() + x.slice(1); };
+function wikiToMatch(m, i) {
+  const sc = m.score;
+  const win = m.winner || (sc ? (sc.h > sc.a ? "h" : sc.a > sc.h ? "a" : m.pen ? (m.pen[0] > m.pen[1] ? "h" : "a") : null) : null);
+  const ev = (list, team) => (list || []).map(g => ({ team, who: g.who, min: g.min, goal: true, pk: g.pk, og: g.og }));
+  return {
+    id: "w" + i + m.home, date: m.date || new Date(0), noTime: !m.hasTime, state: sc ? "post" : "pre",
+    label: sc ? (m.pen ? "T.A.B." : m.aet ? "Ap. prol." : "Terminé") : (m.date ? (m.hasTime ? fmtTime(m.date) : m.date.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })) : "–"),
+    cls: "",
+    home: { name: m.home, full: m.home, score: sc?.h, winner: win === "h", pen: m.pen?.[0] },
+    away: { name: m.away, full: m.away, score: sc?.a, winner: win === "a", pen: m.pen?.[1] },
+    events: [...ev(m.goals1, "h"), ...ev(m.goals2, "a")],
+    venue: [m.venue, m.city].filter(Boolean).join(", "), notes: "",
+  };
+}
+async function renderWikiCup(l) {
+  const main = $("#foot-main");
+  main.innerHTML = `
+    <div class="page-head">
+      <div><h1>${esc(l.n)}</h1><div class="sub" id="league-sub">${l.f ? flagImg(l.f) : ""} ${esc(l.c)}</div></div>
+    </div>
+    <div id="league-body">${loadingHTML()}</div>`;
+  const r = await loadWikiCup(l);
+  if (state.view !== l.s) return;
+  if (!r) { $("#league-body").innerHTML = `<div class="empty">Impossible de charger cette coupe pour le moment.</div>`; return; }
+  $("#league-sub").innerHTML = `${l.f ? flagImg(l.f) : ""} ${esc(l.c)} · saison ${esc(r.title.match(/\d{4}(–\d{2})?/)?.[0] || "")}`;
+  const rounds = new Map();
+  r.matches.forEach((m, i) => { if (!rounds.has(m.round)) rounds.set(m.round, []); rounds.get(m.round).push(wikiToMatch(m, i)); });
+  const groups = [...rounds].map(([name, ms]) => ({
+    name, ms: ms.sort((a, b) => a.date - b.date),
+    last: Math.max(0, ...ms.filter(m => m.state === "post").map(m => +m.date)),
+    first: Math.min(...ms.map(m => +m.date || Infinity)),
+    played: ms.some(m => m.state === "post"),
+  }));
+  const played = groups.filter(g => g.played).sort((a, b) => b.last - a.last || r.rounds.indexOf(b.name) - r.rounds.indexOf(a.name));
+  const upcoming = groups.filter(g => !g.played).sort((a, b) => a.first - b.first);
+  const block = g => `
+    <div class="day-block">
+      <div class="day-title">${esc(roundFr(g.name))} <span class="cnt-sm">${g.ms.length} match${g.ms.length > 1 ? "s" : ""}</span></div>
+      <div class="comp-block"><div class="matches">${g.ms.map(matchHTML).join("")}</div></div>
+    </div>`;
+  const finalPlayed = groups.some(g => /^(final|match)$/i.test(g.name) && g.played);
+  const champ = r.champion && finalPlayed ? `<div class="champion">🏆 Vainqueur : <b>${esc(r.champion)}</b></div>` : "";
+  $("#league-body").innerHTML = (champ
+    + (played.length ? `<div class="section-title" style="margin:8px 0 14px"><h2>Résultats</h2><span>tour le plus récent en premier</span></div>${played.map(block).join("")}` : "")
+    + (upcoming.length ? `<div class="section-title" style="margin:8px 0 14px"><h2>À venir</h2></div>${upcoming.map(block).join("")}` : ""))
+    || `<div class="empty">Pas encore de match publié pour cette coupe.</div>`;
+  $("#league-body").insertAdjacentHTML("beforeend", `<div class="source">Source : Wikipédia — <a href="https://en.wikipedia.org/wiki/${encodeURIComponent(r.title.replace(/ /g, "_"))}" target="_blank" rel="noopener">${esc(r.title)}</a>, mis à jour par la communauté.</div>`);
+}
+
+async function renderStandings(l, slug = l.s) {
+  let d;
+  try { d = await getJSON(`${API_STD}/${slug}/standings`, 300000); }
+  catch { $("#league-body").innerHTML = `<div class="empty">Pas de classement disponible pour cette compétition.</div>`; return; }
+  if (state.view !== l.s || state.tab !== "table") return;
+  const groups = d.children?.length ? d.children : d.standings ? [{ name: d.name, standings: d.standings }] : [];
+  const tables = groups.filter(g => g.standings?.entries?.length);
+  if (!tables.length) { $("#league-body").innerHTML = `<div class="empty">Pas de classement pour cette compétition (format à élimination directe).</div>`; return; }
+  const notes = new Map();
+  const html = tables.map(g => {
+    const rows = g.standings.entries.map(e => {
+      const st = Object.fromEntries(e.stats.map(s => [s.name, s]));
+      const v = k => st[k]?.displayValue ?? st[k]?.value ?? "";
+      if (e.note) notes.set(e.note.color, e.note.description);
+      const gd = +(st.pointDifferential?.value ?? 0);
+      return { rank: +v("rank") || 0, e, v, gd };
+    }).sort((a, b) => a.rank - b.rank);
+    return `
+      <div class="table-wrap">
+        ${tables.length > 1 ? `<div class="table-title">${esc(g.name)}</div>` : ""}
+        <table class="std">
+          <thead><tr><th>#</th><th class="t">Équipe</th><th>J</th><th>G</th><th>N</th><th>P</th><th class="hide-sm">BP</th><th class="hide-sm">BC</th><th>Diff</th><th>Pts</th></tr></thead>
+          <tbody>${rows.map(({ rank, e, v, gd }) => `
+            <tr>
+              <td class="rk">${e.note ? `<i style="background:${e.note.color}"></i>` : ""}${rank || ""}</td>
+              <td class="t"><div class="tm">${e.team.logos?.[0]?.href ? `<img src="${e.team.logos[0].href}" alt="" loading="lazy">` : ""}${esc(e.team.shortDisplayName || e.team.displayName)}</div></td>
+              <td>${v("gamesPlayed")}</td><td>${v("wins")}</td><td>${v("ties")}</td><td>${v("losses")}</td>
+              <td class="hide-sm">${v("pointsFor")}</td><td class="hide-sm">${v("pointsAgainst")}</td>
+              <td class="${gd > 0 ? "gd-pos" : gd < 0 ? "gd-neg" : ""}">${v("pointDifferential")}</td>
+              <td class="pts">${v("points")}</td>
+            </tr>`).join("")}</tbody>
+        </table>
+      </div>`;
+  }).join("");
+  const legend = notes.size ? `<div class="table-wrap"><div class="legend">${[...notes].map(([c, t]) => `<span><i style="background:${c}"></i>${esc(t)}</span>`).join("")}</div></div>` : "";
+  $("#league-body").innerHTML = html + legend;
+}
+
+// ================================================================= CYCLISME
+const IOC = {
+  AUS: "au", SUI: "ch", SWI: "ch", DEN: "dk", GBR: "gb", UAE: "ae", MEX: "mx", ITA: "it", NED: "nl", BEL: "be", SLO: "si", SVN: "si",
+  FRA: "fr", COL: "co", GER: "de", USA: "us", ESP: "es", NOR: "no", ECU: "ec", CZE: "cz", AUT: "at", POL: "pl", NZL: "nz", CAN: "ca",
+  CHN: "cn", KSA: "sa", OMA: "om", POR: "pt", ALB: "al", AND: "ad", ARM: "am", AZE: "az", BIH: "ba", BUL: "bg", CRO: "hr", EST: "ee",
+  GRE: "gr", HUN: "hu", JPN: "jp", KOS: "xk", LTU: "lt", LUX: "lu", MAS: "my", ROU: "ro", SRB: "rs", SVK: "sk", TUR: "tr", BRA: "br",
+  ERI: "er", KAZ: "kz", MRI: "mu", SWE: "se", UKR: "ua", URU: "uy", IRL: "ie", LAT: "lv", ISR: "il", RSA: "za", VEN: "ve", ARG: "ar",
+  FIN: "fi", RUS: "ru", CHI: "cl", KOR: "kr", ISL: "is", UZB: "uz", RWA: "rw", ETH: "et", MAR: "ma", ALG: "dz", PER: "pe", CRC: "cr",
+  GUA: "gt", PAN: "pa", MDA: "md", BLR: "by", GEO: "ge", CYP: "cy", MNE: "me", MKD: "mk", TPE: "tw", THA: "th", IRI: "ir", NAM: "na",
+};
+const cflag = (ioc, cls) => flagImg(IOC[ioc], cls);
+const TEAMS = {
+  UAD: "UAE Team Emirates", TVL: "Visma | Lease a Bike", SOQ: "Soudal Quick-Step", LTK: "Lidl-Trek", MOV: "Movistar",
+  EFE: "EF Education-EasyPost", TBV: "Bahrain Victorious", JAY: "Jayco AlUla", XAT: "XDS Astana", DCT: "Decathlon CMA CGM",
+  RBH: "Red Bull-BORA", APT: "Alpecin-Premier Tech", IGD: "Ineos Grenadiers", UXM: "Uno-X Mobility", COF: "Cofidis",
+  TUD: "Tudor", PQT: "Pinarello-Q36.5", TPP: "Picnic PostNL", GFC: "Groupama-FDJ", LOI: "Lotto-Intermarché", NSN: "NSN Cycling",
+};
+const RACE_FR = {
+  "Tour of Flanders": "Tour des Flandres", "Il Lombardia": "Tour de Lombardie", "Milan–San Remo": "Milan-San Remo",
+  "Tour of the Basque Country": "Tour du Pays basque", "Volta a Catalunya": "Tour de Catalogne", "Tour of Bruges": "Classic Brugge-De Panne",
+  "Tour of Guangxi": "Tour du Guangxi", "Grand Prix Cycliste de Québec": "GP de Québec", "Grand Prix Cycliste de Montréal": "GP de Montréal",
+  "Tour Auvergne-Rhône-Alpes": "Tour Auvergne-Rhône-Alpes (ex-Dauphiné)", "Paris–Roubaix": "Paris-Roubaix", "Liège–Bastogne–Liège": "Liège-Bastogne-Liège",
+  "Tour of Norway": "Tour de Norvège", "Tour of Oman": "Tour d'Oman", "Tour of Britain": "Tour de Grande-Bretagne",
+  "Tour of Flanders for Women": "Tour des Flandres", "Tour of Belgium": "Tour de Belgique", "Baloise Belgium Tour": "Tour de Belgique",
+};
+const GRAND_TOURS = [
+  { k: "Giro d'Italia", fr: "Giro d'Italia", c: "#e8378a" },
+  { k: "Tour de France", fr: "Tour de France", c: "#f5c518" },
+  { k: "Vuelta a España", fr: "Vuelta a España", c: "#e63946" },
+];
+const MONUMENTS = ["Milan–San Remo", "Tour of Flanders", "Paris–Roubaix", "Liège–Bastogne–Liège", "Il Lombardia"];
+const MONTHS = { January: 0, February: 1, March: 2, April: 3, May: 4, June: 5, July: 6, August: 7, September: 8, October: 9, November: 10, December: 11 };
+const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+function parseRange(s, year) {
+  const parts = [...String(s).matchAll(/(\d{1,2})(?:\s+([A-Z][a-z]+))?/g)].map(m => ({ d: +m[1], m: m[2] }));
+  if (!parts.length) return null;
+  const last = parts[parts.length - 1];
+  const lastM = MONTHS[last.m] ?? 0;
+  const first = parts[0];
+  const firstM = first.m ? MONTHS[first.m] : lastM;
+  return { start: new Date(year, firstM, first.d), end: new Date(year, lastM, last.d) };
+}
+function frDate(r) {
+  if (!r) return "";
+  const { start: a, end: b } = r;
+  if (+a === +b) return `${a.getDate()} ${MONTHS_FR[a.getMonth()]}`;
+  if (a.getMonth() === b.getMonth()) return `${a.getDate()}–${b.getDate()} ${MONTHS_FR[a.getMonth()]}`;
+  return `${a.getDate()} ${MONTHS_FR[a.getMonth()]} – ${b.getDate()} ${MONTHS_FR[b.getMonth()]}`;
+}
+const raceName = n => RACE_FR[n] || n;
+const teamName = c => c ? (TEAMS[c] || c) : "";
+
+const cyc = {
+  tab: "worldtour",
+  q: "",
+  be: false,
+  ratings: new Set(),
+};
+
+function prepCycling() {
+  const D = window.CYCLING;
+  const Y = D.season;
+  const all = ["worldtour", "proseries", "europetour", "womenwt"];
+  for (const k of all) D[k].forEach(r => { r.range = parseRange(r.date, Y); });
+  return D;
+}
+
+function renderCycling() {
+  const D = window.CYCLING.__prepped || (window.CYCLING.__prepped = prepCycling());
+  const today = new Date();
+  const men = [...D.worldtour, ...D.proseries, ...D.europetour];
+  const done = men.filter(r => r.winner && r.winner.nat);
+  const beWins = done.filter(r => r.winner.nat === "BEL").length;
+  const riders = new Set(done.map(r => r.winner.name)).size;
+  const gt = name => D.worldtour.find(r => r.race === name);
+
+  // classements vainqueurs
+  const wins = new Map();
+  for (const r of done) {
+    const k = r.winner.name;
+    const o = wins.get(k) || { name: k, nat: r.winner.nat, n: 0, wt: 0 };
+    o.n++; if (r.level === "WorldTour") o.wt++;
+    wins.set(k, o);
+  }
+  const topRiders = [...wins.values()].sort((a, b) => b.n - a.n || b.wt - a.wt).slice(0, 12);
+  const nations = new Map();
+  for (const r of done) nations.set(r.winner.nat, (nations.get(r.winner.nat) || 0) + 1);
+  const topNations = [...nations].sort((a, b) => b[1] - a[1]).slice(0, 12);
+  const NAT_FR = new Intl.DisplayNames(["fr"], { type: "region" });
+  const natName = ioc => { try { return NAT_FR.of((IOC[ioc] || "").toUpperCase().replace("XK", "XK")) || ioc; } catch { return ioc; } };
+
+  const medal = i => `<span class="medal m${i + 1}">${i + 1}</span>`;
+  const rider = (a, cls) => a ? `${cflag(a.nat, cls)}<span>${esc(a.name)}</span>` : "";
+
+  const gtCards = GRAND_TOURS.map(g => {
+    const r = gt(g.k);
+    if (!r) return "";
+    const jersey = `<svg class="jersey" viewBox="0 0 40 40"><path d="M13 4l-9 6 4 8 4-2v20h16V16l4 2 4-8-9-6c-1 3-4 5-7 5s-6-2-7-5z" fill="${g.c}" stroke="rgba(0,0,0,.25)"/></svg>`;
+    return `
+      <div class="gt-card ${r.stages ? "has-stages" : ""}" style="--c:${g.c}" data-race="worldtour:${D.worldtour.indexOf(r)}">
+        ${jersey}
+        <div class="race">${esc(g.fr)}</div>
+        <div class="winner">${rider(r.winner, "flag lg")}</div>
+        <div class="pod">
+          ${r.second ? `<div>${medal(1)} ${cflag(r.second.nat)} ${esc(r.second.name)}</div>` : ""}
+          ${r.third ? `<div>${medal(2)} ${cflag(r.third.nat)} ${esc(r.third.name)}</div>` : ""}
+        </div>
+        <div class="date">${frDate(r.range)} ${D.season}${r.stages ? ` · <span class="see-stages">Voir les ${r.stages.length} étapes ›</span>` : ""}</div>
+      </div>`;
+  }).join("");
+  const monCards = MONUMENTS.map(n => {
+    const r = gt(n);
+    if (!r) return "";
+    return `
+      <div class="mon-card">
+        <div class="race">${esc(raceName(n))}</div>
+        <div class="date">${frDate(r.range)}</div>
+        <div class="winner">${rider(r.winner)}</div>
+        ${r.second ? `<div class="cobble">2. ${esc(r.second.name)} · 3. ${esc(r.third?.name || "")}</div>` : ""}
+      </div>`;
+  }).join("");
+  const champCards = D.championships.map(c => `
+    <div class="champ-card ${c.champ === "Mondiaux" ? "rainbow" : "euro"}">
+      <div class="t">${esc(c.champ)} · ${esc(c.cat)}</div>
+      <div class="e">${esc(c.event)}</div>
+      ${c.podium.map((p, i) => `<div class="p">${medal(i)} ${cflag(p.nat)} ${esc(p.name)}</div>`).join("")}
+    </div>`).join("");
+  const maxW = topRiders[0]?.n || 1, maxN = topNations[0]?.[1] || 1;
+
+  $("#velo-main").innerHTML = `
+    <div class="hero">
+      <h1>Saison cycliste <em>${D.season}</em></h1>
+      <p>Tous les vainqueurs du World Tour, des UCI ProSeries et des courses .1 / .2 de l'Europe Tour, plus le World Tour féminin et les championnats.</p>
+      <div class="hero-stats">
+        <div><b>${D.worldtour.length}</b><span>courses World Tour</span></div>
+        <div><b>${men.length + D.womenwt.length}</b><span>courses répertoriées</span></div>
+        <div><b>${riders}</b><span>vainqueurs différents</span></div>
+        <div><b>${beWins}</b><span>${flagImg("be")} victoires belges</span></div>
+      </div>
+    </div>
+
+    <div class="section-title"><h2>Grands Tours</h2><span>Classement général final</span></div>
+    <div class="gt-grid">${gtCards}</div>
+
+    <div class="section-title"><h2>Monuments</h2><span>Les 5 classiques les plus prestigieuses</span></div>
+    <div class="mon-grid">${monCards}</div>
+
+    <div class="section-title"><h2>Championnats</h2><span>Mondiaux (Montréal) & Europe</span></div>
+    <div class="champ-grid">${champCards}</div>
+
+    <div class="section-title"><h2>Tous les vainqueurs</h2><span id="race-count"></span></div>
+    <div class="tabs" id="cyc-tabs">
+      <button class="tab" data-ctab="worldtour">World Tour</button>
+      <button class="tab" data-ctab="proseries">ProSeries</button>
+      <button class="tab" data-ctab="europetour">Europe Tour (.1 / .2)</button>
+      <button class="tab" data-ctab="womenwt">World Tour féminin</button>
+    </div>
+    <div class="toolbar" id="cyc-toolbar"></div>
+    <div class="table-wrap"><table class="race-table" id="race-table"></table></div>
+
+    <div class="section-title"><h2>Les plus victorieux</h2><span>Hommes · WT + ProSeries + Europe Tour</span></div>
+    <div class="leader-grid">
+      <div class="leaders">${topRiders.map((r, i) => `
+        <div class="leader">
+          <div class="pos">${i + 1}</div>
+          <div class="nm">${cflag(r.nat)} ${esc(r.name)} <small>${r.wt ? `· ${r.wt} WT` : ""}</small></div>
+          <div class="bar"><i style="--w:${(r.n / maxW).toFixed(3)}"></i><b>${r.n}</b></div>
+        </div>`).join("")}</div>
+      <div class="nations">
+        <div class="table-title" style="margin:-12px -16px 10px;border-radius:14px 14px 0 0">Victoires par nation</div>
+        ${topNations.map(([n, c]) => `
+          <div class="nation">${cflag(n)}<span>${esc(natName(n))}</span><i style="width:${Math.round(c / maxN * 100)}%"></i><b>${c}</b></div>`).join("")}
+      </div>
+    </div>
+    <div class="source">Données : ${esc(D.source)}, mises à jour au 19 octobre 2026. Football : ESPN, en temps réel.</div>`;
+
+  $("#velo-main").addEventListener("click", e => {
+    const el = e.target.closest("[data-race]");
+    if (el && el.classList.contains("has-stages")) openRace(el.dataset.race);
+  });
+  $("#cyc-tabs").addEventListener("click", e => {
+    const t = e.target.closest("[data-ctab]");
+    if (!t) return;
+    cyc.tab = t.dataset.ctab; cyc.ratings.clear();
+    renderRaceTable();
+  });
+  $("#cyc-toolbar").addEventListener("click", onToolbarClick);
+  renderRaceTable();
+}
+
+function renderRaceTable() {
+  const D = window.CYCLING.__prepped;
+  const list = D[cyc.tab];
+  document.querySelectorAll("#cyc-tabs .tab").forEach(b => b.classList.toggle("active", b.dataset.ctab === cyc.tab));
+  const ratings = [...new Set(list.map(r => r.rating).filter(Boolean))].sort();
+  const tb = $("#cyc-toolbar");
+  tb.innerHTML = `
+    <input class="search" id="cyc-q" type="search" placeholder="Course ou coureur…" value="${esc(cyc.q)}">
+    <button class="chip be ${cyc.be ? "on" : ""}" data-be>${flagImg("be")} Belgique</button>
+    ${ratings.map(r => `<button class="chip ${cyc.ratings.has(r) ? "on" : ""}" data-rating="${r}">${r}</button>`).join("")}`;
+  const q = $("#cyc-q");
+  q.addEventListener("input", () => { cyc.q = q.value; drawRows(); });
+  drawRows();
+}
+
+function onToolbarClick(e) {
+  const be = e.target.closest("[data-be]");
+  if (be) { cyc.be = !cyc.be; be.classList.toggle("on", cyc.be); drawRows(); }
+  const r = e.target.closest("[data-rating]");
+  if (r) { const v = r.dataset.rating; cyc.ratings.has(v) ? cyc.ratings.delete(v) : cyc.ratings.add(v); r.classList.toggle("on"); drawRows(); }
+}
+
+function drawRows() {
+  const D = window.CYCLING.__prepped;
+  const list = D[cyc.tab];
+  const today = new Date();
+  const podium = cyc.tab === "worldtour" || cyc.tab === "womenwt";
+  const q = cyc.q.trim().toLowerCase();
+  const rows = list.filter(r =>
+    (!cyc.be || r.country === "BEL" || r.winner?.nat === "BEL") &&
+    (!cyc.ratings.size || cyc.ratings.has(r.rating)) &&
+    (!q || (r.race + " " + raceName(r.race) + " " + (r.winner?.name || "") + " " + (r.second?.name || "") + " " + (r.third?.name || "")).toLowerCase().includes(q))
+  );
+  const lvl = cyc.tab === "worldtour" || cyc.tab === "womenwt" ? `<span class="rating wt">WT</span>` : cyc.tab === "proseries" ? `<span class="rating pro">Pro</span>` : "";
+  const tag = r => GRAND_TOURS.some(g => g.k === r.race) && cyc.tab === "worldtour" ? `<span class="tag gt">GRAND TOUR</span>`
+    : MONUMENTS.includes(r.race) && cyc.tab === "worldtour" ? `<span class="tag mon">MONUMENT</span>` : "";
+  $("#race-count").textContent = `${rows.length} course${rows.length > 1 ? "s" : ""}`;
+  $("#race-table").innerHTML = `
+    <thead><tr><th>Course</th><th class="hide-sm">Date</th><th>Vainqueur</th>${podium ? `<th class="hide-sm">2e / 3e</th>` : `<th class="hide-sm">Équipe</th>`}</tr></thead>
+    <tbody>${rows.map(r => {
+      const future = !r.winner && !r.status?.includes("Annul") && r.range && r.range.end >= today;
+      const cancel = r.status === "Annulée";
+      const w = r.winner
+        ? `<div class="rw">${r.winner.nat ? cflag(r.winner.nat) : "👥"} ${esc(r.winner.nat ? r.winner.name : teamName(r.winner.name.replace("Équipe ", "")) + " (équipe)")}</div>`
+        : `<span class="rt">${cancel ? "Annulée" : future ? "À venir" : "—"}</span>`;
+      return `
+        <tr class="${future ? "future" : ""} ${cancel ? "cancel" : ""} ${r.stages ? "has-stages" : ""}" ${r.stages ? `data-race="${cyc.tab}:${list.indexOf(r)}"` : ""}>
+          <td><div class="rn">${cflag(r.country)} ${esc(raceName(r.race))} ${r.rating ? `<span class="rating">${esc(r.rating)}</span>` : lvl} ${tag(r)}${r.stages ? `<span class="stages-badge">${r.stages.length} étapes ›</span>` : ""}</div>
+              <div class="rt only-sm" style="margin-top:2px">${frDate(r.range)}</div></td>
+          <td class="rd hide-sm">${frDate(r.range)}</td>
+          <td>${w}</td>
+          ${podium
+            ? `<td class="sm hide-sm">${r.second ? `<div>${cflag(r.second.nat)} ${esc(r.second.name)}</div><div>${cflag(r.third?.nat)} ${esc(r.third?.name || "")}</div>` : ""}</td>`
+            : `<td class="sm hide-sm">${esc(teamName(r.team))}</td>`}
+        </tr>`;
+    }).join("") || `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:30px">Aucune course ne correspond.</td></tr>`}</tbody>`;
+}
+
+// ---------- fiche d'une course à étapes
+const STAGE_TYPES = [
+  [/team time trial/i, "CLM par équipes", "ttt"], [/time trial|prologue/i, "Contre-la-montre", "tt"],
+  [/medium[- ]mountain|hilly|intermediate/i, "Vallonnée", "hill"], [/mountain|summit/i, "Montagne", "mtn"],
+  [/flat|plain/i, "Plat", "flat"],
+];
+const stageType = t => { for (const [re, fr, c] of STAGE_TYPES) if (re.test(t || "")) return { fr, c }; return t ? { fr: t, c: "" } : null; };
+const enDateFr = s => String(s || "").replace(/([A-Z][a-z]+)/g, m => MONTHS[m] != null ? MONTHS_FR[MONTHS[m]] : m);
+const JERSEY_C = { "Général": "#f5c518", "Points": "#2a9d47", "Montagne": "#e63946", "Jeune": "#ffffff", "Sprints": "#2a7bff", "Combativité": "#d08a4a", "Équipes": "#8a97b4" };
+const riderName = n => n.startsWith("team:") ? teamName(n.slice(5)) : n;
+function stageWinner(w) {
+  if (!w) return `<span class="rt">—</span>`;
+  if (w.team) return `👥 <span>${esc(teamName(w.name))}</span>`;
+  return `${w.nat ? cflag(w.nat) : ""}<span>${esc(w.name)}</span>`;
+}
+function openRace(key) {
+  const [k, i] = key.split(":");
+  const r = window.CYCLING.__prepped[k][+i];
+  if (!r?.stages) return;
+  const gt = GRAND_TOURS.find(g => g.k === r.race);
+  const color = gt?.c || "var(--gold)";
+  const tally = new Map();
+  r.stages.forEach(s => { const w = s.winner; if (w && !w.team) { const o = tally.get(w.name) || { ...w, n: 0 }; o.n++; tally.set(w.name, o); } });
+  const top = [...tally.values()].sort((a, b) => b.n - a.n).filter(x => x.n > 1).slice(0, 6);
+  const medal = i => `<span class="medal m${i + 1}">${i + 1}</span>`;
+  const podium = [r.winner, r.second, r.third].filter(Boolean);
+  const html = `
+    <div class="modal-card" role="dialog" aria-modal="true" style="--rc:${color}">
+      <button class="modal-x" data-close aria-label="Fermer">✕</button>
+      <div class="modal-head">
+        <div class="mh-flag">${cflag(r.country, "flag lg")}</div>
+        <div>
+          <h2>${esc(raceName(r.race))}</h2>
+          <div class="sub">${frDate(r.range)} ${window.CYCLING.season} · ${r.stages.length} étapes${r.rating ? " · " + esc(r.rating) : r.level ? " · " + esc(r.level) : ""}</div>
+        </div>
+      </div>
+      <div class="modal-grid">
+        <div class="mpanel">
+          <div class="mp-title">Classement général final</div>
+          ${podium.map((a, j) => `<div class="pod-line">${medal(j)} ${cflag(a.nat)} <b>${esc(a.name)}</b></div>`).join("") || "—"}
+        </div>
+        ${r.jerseys ? `<div class="mpanel">
+          <div class="mp-title">Maillots & classements</div>
+          ${r.jerseys.map(j => `<div class="jersey-line"><i style="background:${JERSEY_C[j.cls] || "var(--dim)"}"></i><span class="jc">${esc(j.cls)}</span><b>${esc(riderName(j.name))}</b></div>`).join("")}
+        </div>` : ""}
+        ${top.length ? `<div class="mpanel">
+          <div class="mp-title">Plusieurs victoires d'étape</div>
+          ${top.map(t => `<div class="pod-line">${cflag(t.nat)} <b>${esc(t.name)}</b><span class="wins">${t.n}</span></div>`).join("")}
+        </div>` : ""}
+      </div>
+      <div class="table-wrap stage-wrap">
+        <table class="race-table stage-table">
+          <thead><tr><th>Étape</th><th class="hide-sm">Date</th><th class="hide-sm">Parcours</th><th>Vainqueur</th></tr></thead>
+          <tbody>${r.stages.map(s => {
+            const t = stageType(s.type);
+            return `<tr>
+              <td><span class="snum">${s.n === "P" ? "Prol." : esc(s.n)}</span>${t ? `<span class="stype ${t.c}">${esc(t.fr)}</span>` : ""}</td>
+              <td class="rd hide-sm">${esc(enDateFr(s.date))}</td>
+              <td class="sm hide-sm">${esc(s.course)}${s.km ? `<span class="km">${esc(s.km)} km</span>` : ""}</td>
+              <td><div class="rw">${stageWinner(s.winner)}</div>${s.course ? `<div class="rt only-sm">${esc(s.course)}${s.km ? " · " + esc(s.km) + " km" : ""}</div>` : ""}</td>
+            </tr>`;
+          }).join("")}</tbody>
+        </table>
+      </div>
+    </div>`;
+  let m = $("#race-modal");
+  if (!m) {
+    m = document.createElement("div");
+    m.id = "race-modal";
+    m.className = "modal";
+    m.addEventListener("click", e => { if (e.target === m || e.target.closest("[data-close]")) closeRace(); });
+    document.body.appendChild(m);
+  }
+  m.innerHTML = html;
+  m.classList.add("show");
+  document.body.style.overflow = "hidden";
+}
+function closeRace() {
+  $("#race-modal")?.classList.remove("show");
+  document.body.style.overflow = "";
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeRace(); });
+
+// ---------- fiche match : résumé, compositions, statistiques (mise à jour toutes les 30 s pendant le match)
+const mc = { league: null, id: null, tab: "lineups", timer: null, data: null };
+const STAT_ROWS = [
+  ["possessionPct", "Possession", "%"], ["totalShots", "Tirs"], ["shotsOnTarget", "Tirs cadrés"], ["wonCorners", "Corners"],
+  ["saves", "Arrêts"], ["foulsCommitted", "Fautes"], ["offsides", "Hors-jeu"], ["yellowCards", "Cartons jaunes"],
+  ["redCards", "Cartons rouges"], ["totalPasses", "Passes"], ["accuratePasses", "Passes réussies"], ["passPct", "Précision des passes", "%"],
+  ["totalTackles", "Tacles"], ["totalClearance", "Dégagements"],
+];
+const STAT_ALIASES = { possessionPct: ["Possession"], totalShots: ["SHOTS", "Shots"], shotsOnTarget: ["ON GOAL", "Shots on Goal"], wonCorners: ["Corner Kicks"],
+  saves: ["Saves"], foulsCommitted: ["Fouls"], offsides: ["Offsides"], yellowCards: ["Yellow Cards"], redCards: ["Red Cards"], totalPasses: ["Passes"],
+  accuratePasses: ["Accurate Passes"], passPct: ["Pass Completion %"], totalTackles: ["Tackles"], totalClearance: ["Clearances"] };
+
+function openMatch(league, id) {
+  mc.league = league; mc.id = id; mc.data = null;
+  let m = $("#match-modal");
+  if (!m) {
+    m = document.createElement("div");
+    m.id = "match-modal";
+    m.className = "modal";
+    m.addEventListener("click", e => {
+      if (e.target === m || e.target.closest("[data-mclose]")) return closeMatch();
+      const t = e.target.closest("[data-mctab]");
+      if (t) { mc.tab = t.dataset.mctab; drawMatch(); }
+    });
+    document.body.appendChild(m);
+  }
+  m.innerHTML = `<div class="modal-card mc-card"><button class="modal-x" data-mclose aria-label="Fermer">✕</button>${loadingHTML("Chargement de la fiche du match…")}</div>`;
+  m.classList.add("show");
+  document.body.style.overflow = "hidden";
+  loadMatch();
+}
+function closeMatch() {
+  clearTimeout(mc.timer);
+  mc.id = null;
+  $("#match-modal")?.classList.remove("show");
+  document.body.style.overflow = "";
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape" && mc.id) closeMatch(); });
+
+async function loadMatch() {
+  clearTimeout(mc.timer);
+  const { league, id } = mc;
+  try {
+    const d = await getJSON(`${API}/${league}/summary?event=${id}`, 15000);
+    if (mc.id !== id) return;
+    mc.data = d;
+    drawMatch();
+    const st = d.header?.competitions?.[0]?.status?.type?.state;
+    if (st === "in") mc.timer = setTimeout(loadMatch, 30000);          // en direct : toutes les 30 s
+    else if (st === "pre") mc.timer = setTimeout(loadMatch, 120000);   // avant le match : les compos peuvent tomber
+  } catch {
+    if (mc.id !== id) return;
+    $("#match-modal .mc-card").innerHTML = `<button class="modal-x" data-mclose aria-label="Fermer">✕</button><div class="empty">Impossible de charger ce match. Réessaie dans un instant.</div>`;
+    mc.timer = setTimeout(loadMatch, 30000);
+  }
+}
+
+function drawMatch() {
+  const d = mc.data;
+  if (!d) return;
+  const comp = d.header.competitions[0];
+  const side = ha => comp.competitors.find(c => c.homeAway === ha);
+  const H = side("home"), A = side("away");
+  const st = comp.status.type;
+  const live = st.state === "in";
+  const ev = parseEvent({ id: mc.id, date: comp.date, status: comp.status, competitions: [{ ...comp, details: [] }] }, mc.league);
+  const l = Object.values(BY_SLUG).find(x => x.s === mc.league || x.sub?.some(s => s[0] === mc.league));
+  const keyEv = d.keyEvents || [];
+  const goals = tid => keyEv.filter(k => k.scoringPlay && k.team?.id === tid && !/shootout/i.test(k.type?.type || ""))
+    .map(k => `${esc(shortName(k.participants?.[0]?.athlete?.displayName || ""))} ${esc(k.clock?.displayValue || "")}${k.type?.type === "own-goal" ? " (c.s.c.)" : /penalty/i.test(k.type?.text || "") ? " (pén.)" : ""}`);
+  const logo = t => t.team.logos?.[0]?.href || t.team.logo;
+  const scoreBox = played => played
+    ? `<div class="mc-score ${live ? "live" : ""}"><span>${esc(H.score)}</span><i>:</i><span>${esc(A.score)}</span></div>`
+    : `<div class="mc-score pre"><span class="kick">${fmtTime(new Date(comp.date))}</span></div>`;
+  const played = st.state !== "pre";
+  const pens = H.shootoutScore != null ? `<div class="mc-pens">T.A.B. ${H.shootoutScore} – ${A.shootoutScore}</div>` : "";
+  const venue = d.gameInfo?.venue?.fullName;
+  const att = d.gameInfo?.attendance;
+  const ref = (d.gameInfo?.officials || []).find(o => /referee/i.test(o.position?.name || o.position?.displayName || ""))?.displayName;
+
+  const head = `
+    <div class="mc-league">${l ? `${l.f ? flagImg(l.f) : ""} ${esc(l.c)} · ${esc(l.n)}` : ""} · ${fmtDay(new Date(comp.date))}</div>
+    <div class="mc-head">
+      <div class="mc-team">${logo(H) ? `<img src="${logo(H)}" alt="">` : ""}<b>${esc(H.team.displayName)}</b><div class="mc-goals">${goals(H.team.id).join("<br>")}</div></div>
+      <div class="mc-mid">
+        ${scoreBox(played)}
+        <div class="mc-status ${live ? "live" : ""}">${live ? `<i></i>${esc(ev.label)}` : played ? esc(ev.label) : "Coup d'envoi"}</div>
+        ${pens}
+      </div>
+      <div class="mc-team">${logo(A) ? `<img src="${logo(A)}" alt="">` : ""}<b>${esc(A.team.displayName)}</b><div class="mc-goals">${goals(A.team.id).join("<br>")}</div></div>
+    </div>
+    <div class="mc-info">${[venue && "🏟 " + esc(venue), att ? `${Number(att).toLocaleString("fr-BE")} spectateurs` : "", ref && "Arbitre : " + esc(ref)].filter(Boolean).join(" · ")}
+      ${played ? `<a class="yt" href="https://www.youtube.com/results?search_query=${encodeURIComponent(`${H.team.displayName} ${A.team.displayName} résumé ${new Date(comp.date).getFullYear()}`)}" target="_blank" rel="noopener">▶ Résumé sur YouTube</a>` : ""}</div>
+    <div class="tabs mc-tabs">
+      <button class="tab ${mc.tab === "lineups" ? "active" : ""}" data-mctab="lineups">Compositions</button>
+      <button class="tab ${mc.tab === "stats" ? "active" : ""}" data-mctab="stats">Statistiques</button>
+      <button class="tab ${mc.tab === "events" ? "active" : ""}" data-mctab="events">Temps forts</button>
+      ${(d.videos || []).length ? `<button class="tab ${mc.tab === "videos" ? "active" : ""}" data-mctab="videos">Vidéos · ${d.videos.length}</button>` : ""}
+      ${live ? `<span class="mc-auto">Mise à jour automatique toutes les 30 s</span>` : ""}
+    </div>`;
+
+  let body = "";
+  if (mc.tab === "lineups") body = lineupsHTML(d, H, A);
+  else if (mc.tab === "stats") body = statsHTML(d, H, A);
+  else if (mc.tab === "videos") body = `<div class="clips">${(d.videos || []).map(v => clipFrom(v, { name: "", date: comp.date }, mc.league)).filter(Boolean).map(clipCard).join("")}</div>`;
+  else body = eventsHTML(keyEv, H, A);
+
+  const card = $("#match-modal .mc-card");
+  if (card) card.innerHTML = `<button class="modal-x" data-mclose aria-label="Fermer">✕</button>${head}<div class="mc-body">${body}</div>`;
+}
+const shortName = n => { const p = String(n).split(" "); return p.length > 1 ? p[0][0] + ". " + p.slice(1).join(" ") : n; };
+
+/* --- compositions : terrain + remplaçants --- */
+function lineRank(ab) {
+  ab = ab || "";
+  if (ab === "G") return 0;
+  if (/^(CD|LB|RB|D|SW|LWB|RWB|WB)/.test(ab)) return 1;
+  if (/^DM/.test(ab)) return 2;
+  if (/^(CM|LM|RM|M)/.test(ab)) return 3;
+  if (/^AM/.test(ab)) return 4;
+  return 5;
+}
+const lateral = ab => /(^L|-L$)/.test(ab || "") ? 0 : /(^R|-R$)/.test(ab || "") ? 2 : 1;
+function playerMarks(p) {
+  const s = Object.fromEntries((p.stats || []).map(x => [x.name, +x.value || 0]));
+  const plays = p.plays || [];
+  const subMin = plays.find(x => x.substitution)?.clock?.displayValue;
+  let m = "";
+  if (s.totalGoals) m += `<span class="pm goal">${"⚽".repeat(Math.min(s.totalGoals, 3))}</span>`;
+  if (s.ownGoals) m += `<span class="pm og" title="But contre son camp">⚽</span>`;
+  if (s.goalAssists) m += `<span class="pm ast" title="Passe décisive">A${s.goalAssists > 1 ? s.goalAssists : ""}</span>`;
+  if (s.redCards) m += `<i class="card-r"></i>`; else if (s.yellowCards) m += `<i class="card-y"></i>`;
+  if (p.subbedOut) m += `<span class="pm out" title="Remplacé">▼${esc(subMin || "")}</span>`;
+  if (p.subbedIn) m += `<span class="pm in" title="Entré en jeu">▲${esc(subMin || "")}</span>`;
+  return m;
+}
+function teamLines(r) {
+  const starters = (r.roster || []).filter(p => p.starter);
+  const form = (r.formation || "").split("-").map(Number).filter(Boolean);
+  const sorted = [...starters].sort((a, b) => lineRank(a.position?.abbreviation) - lineRank(b.position?.abbreviation)
+    || lateral(a.position?.abbreviation) - lateral(b.position?.abbreviation));
+  const lines = [sorted.slice(0, 1)];
+  let i = 1;
+  if (form.length && form.reduce((a, b) => a + b, 0) === starters.length - 1) {
+    for (const n of form) { lines.push(sorted.slice(i, i + n)); i += n; }
+  } else {
+    const groups = {};
+    sorted.slice(1).forEach(p => { const k = lineRank(p.position?.abbreviation); (groups[k] = groups[k] || []).push(p); });
+    Object.keys(groups).sort().forEach(k => lines.push(groups[k]));
+  }
+  return lines;
+}
+/* Note Arena sur 10, calculée à partir des stats du joueur et du résultat de son équipe
+   (ESPN ne publie pas de notes : base 6, bonus/malus par action, comme les sites de notes). */
+function playerRating(p, teamGoals, oppGoals) {
+  const played = p.starter || p.subbedIn;
+  if (!played) return null;
+  const s = Object.fromEntries((p.stats || []).map(x => [x.name, +x.value || 0]));
+  const line = lineRank(p.position?.abbreviation === "SUB" ? "" : p.position?.abbreviation);
+  const gk = p.position?.abbreviation === "G";
+  const w = p.subbedIn ? 0.5 : 1;   // un remplaçant joue moins longtemps : effets d'équipe réduits
+  let r = 6;
+  r += 1.15 * (s.totalGoals || 0) + 0.8 * (s.goalAssists || 0);
+  r += 0.2 * (s.shotsOnTarget || 0) + 0.05 * Math.max(0, (s.totalShots || 0) - (s.shotsOnTarget || 0));
+  r += 0.08 * (s.foulsSuffered || 0) - 0.08 * (s.foulsCommitted || 0);
+  r -= 0.4 * (s.yellowCards || 0) + 1.5 * (s.redCards || 0) + 1 * (s.ownGoals || 0);
+  if (gk) {
+    r += 0.35 * (s.saves || 0) - 0.45 * (s.goalsConceded ?? oppGoals);
+    if (!oppGoals && p.starter) r += 0.8;
+  } else if (line === 1) {
+    r += oppGoals ? -Math.min(1, 0.2 * oppGoals) * w : 0.6 * w;
+  }
+  r += (teamGoals > oppGoals ? 0.4 : teamGoals < oppGoals ? -0.3 : 0) * w;
+  return Math.max(3, Math.min(10, Math.round(r * 10) / 10));
+}
+const ratingClass = r => r >= 8 ? "r-top" : r >= 7 ? "r-good" : r >= 6 ? "r-mid" : "r-low";
+const ratingBadge = r => r == null ? "" : `<span class="rating-b ${ratingClass(r)}">${r.toFixed(1)}</span>`;
+
+function lineupsHTML(d, H, A) {
+  const rosters = d.rosters || [];
+  const rH = rosters.find(r => r.homeAway === "home"), rA = rosters.find(r => r.homeAway === "away");
+  if (!rH?.roster?.length || !rA?.roster?.length)
+    return `<div class="empty">Les compositions ne sont pas encore publiées.<br>Elles arrivent en général une heure avant le coup d'envoi ; la fiche se met à jour toute seule.</div>`;
+  const color = (t, fb) => "#" + (t.team.color && t.team.color !== "000000" ? t.team.color : fb);
+  const cH = color(H, "38d6ff");
+  let cA = color(A, "ff4f8b");
+  // deux maillots trop proches (ex. rouge contre rouge) : l'équipe à l'extérieur prend sa couleur secondaire
+  const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const dist = (x, y) => Math.hypot(...rgb(x).map((v, i) => v - rgb(y)[i]));
+  if (dist(cH, cA) < 140) {
+    const alt = A.team.alternateColor && "#" + A.team.alternateColor;
+    cA = alt && /^#[0-9a-f]{6}$/i.test(alt) && dist(cH, alt) >= 140 && dist(alt, "#ffffff") > 60 ? alt : dist(cH, "#2a6df4") >= 140 ? "#2a6df4" : "#e9edf5";
+  }
+  const started = d.header?.competitions?.[0]?.status?.type?.state !== "pre";
+  const gH = +H.score || 0, gA = +A.score || 0;
+  const rate = (p, home) => started ? playerRating(p, home ? gH : gA, home ? gA : gH) : null;
+  const best = (r, home) => (r.roster || []).map(p => ({ p, v: rate(p, home) })).filter(x => x.v != null).sort((a, b) => b.v - a.v)[0];
+  const chip = (p, c, home) => `
+    <div class="pl">
+      <span class="pl-num" style="--tc:${c}">${esc(p.jersey || "")}${ratingBadge(rate(p, home))}</span>
+      <span class="pl-name">${esc(p.athlete?.lastName || shortName(p.athlete?.displayName || ""))}</span>
+      <span class="pl-marks">${playerMarks(p)}</span>
+    </div>`;
+  const half = (r, c, flip) => {
+    const lines = teamLines(r);
+    return `<div class="half ${flip ? "top" : "bottom"}">${(flip ? lines : [...lines].reverse()).map(line =>
+      `<div class="pl-line">${(flip ? [...line].reverse() : line).map(p => chip(p, c, !flip)).join("")}</div>`).join("")}</div>`;
+  };
+  const bench = (r, c, t, home) => `
+    <div class="bench">
+      <div class="mp-title">${esc(t.team.shortDisplayName || t.team.displayName)} · remplaçants</div>
+      ${(r.roster || []).filter(p => !p.starter).map(p => `
+        <div class="bench-row ${p.subbedIn ? "played" : ""}">
+          <span class="pl-num sm" style="--tc:${c}">${esc(p.jersey || "")}</span>
+          <span class="bn">${esc(p.athlete?.displayName || "")}</span>
+          <span class="pl-marks">${playerMarks(p)}</span>
+          ${ratingBadge(rate(p, home))}
+        </div>`).join("")}
+    </div>`;
+  const bH = best(rH, true), bA = best(rA, false);
+  const motm = (b, t) => b ? `<div class="motm"><img src="${t.team.logos?.[0]?.href || ""}" alt=""><div><small>Meilleur joueur · ${esc(t.team.shortDisplayName || t.team.displayName)}</small><b>${esc(b.p.athlete?.displayName || "")}</b></div>${ratingBadge(b.v)}</div>` : "";
+  return `
+    ${started && (bH || bA) ? `<div class="motms">${motm(bH, H)}${motm(bA, A)}</div><p class="hint center rating-note">Notes sur 10 calculées par Arena à partir des stats du match (buts, passes décisives, tirs, arrêts, cartons, résultat).</p>` : ""}
+    <div class="lineups">
+      <div class="pitch-wrap">
+        <div class="form-tag top"><img src="${A.team.logos?.[0]?.href || ""}" alt=""> ${esc(A.team.shortDisplayName || A.team.displayName)} <b>${esc(rA.formation || "")}</b></div>
+        <div class="pitch">
+          <div class="pitch-lines"><i class="c"></i><i class="box t"></i><i class="box b"></i><i class="six t"></i><i class="six b"></i><i class="mid"></i></div>
+          ${half(rA, cA, true)}
+          ${half(rH, cH, false)}
+        </div>
+        <div class="form-tag"><img src="${H.team.logos?.[0]?.href || ""}" alt=""> ${esc(H.team.shortDisplayName || H.team.displayName)} <b>${esc(rH.formation || "")}</b></div>
+      </div>
+      <div class="benches">${bench(rH, cH, H, true)}${bench(rA, cA, A, false)}</div>
+    </div>`;
+}
+
+/* --- statistiques --- */
+function statsHTML(d, H, A) {
+  const teams = d.boxscore?.teams || [];
+  const get = (tid, key) => {
+    const t = teams.find(x => x.team.id === tid);
+    if (!t) return null;
+    const s = (t.statistics || []).find(x => x.name === key) || (t.statistics || []).find(x => (STAT_ALIASES[key] || []).includes(x.label));
+    if (!s) return null;
+    let v = parseFloat(s.displayValue);
+    if (isNaN(v)) return null;
+    if (key === "passPct" && v <= 1) v = Math.round(v * 100);
+    return v;
+  };
+  const rows = STAT_ROWS.map(([k, label, unit]) => {
+    const h = get(H.team.id, k), a = get(A.team.id, k);
+    if (h == null || a == null || (h === 0 && a === 0 && k !== "possessionPct" && k !== "redCards")) return "";
+    if (k === "redCards" && !h && !a) return "";
+    const tot = h + a || 1;
+    const fmt = v => (k === "possessionPct" ? Math.round(v) : v) + (unit || "");
+    return `
+      <div class="st-row">
+        <b class="${h > a ? "lead" : ""}">${fmt(h)}</b>
+        <span class="st-label">${label}</span>
+        <b class="${a > h ? "lead" : ""}">${fmt(a)}</b>
+        <div class="st-bar"><i class="h" style="width:${h / tot * 100}%"></i><i class="a" style="width:${a / tot * 100}%"></i></div>
+      </div>`;
+  }).join("");
+  return rows ? `<div class="stats">${rows}</div>` : `<div class="empty">Pas encore de statistiques pour ce match.</div>`;
+}
+
+/* --- temps forts --- */
+function eventsHTML(keyEv, H, A) {
+  const items = keyEv.filter(k => /goal|card|substitution|penalty/i.test(k.type?.type || "") || k.scoringPlay);
+  if (!items.length) return `<div class="empty">Aucun temps fort pour le moment.</div>`;
+  return `<div class="timeline">${items.map(k => {
+    const t = k.type?.type || "";
+    const home = k.team?.id === H.team.id;
+    const names = (k.participants || []).map(p => p.athlete?.displayName).filter(Boolean);
+    const icon = k.scoringPlay ? "⚽" : /red/.test(t) ? `<i class="card-r"></i>` : /yellow/.test(t) ? `<i class="card-y"></i>` : /substitution/.test(t) ? "⇄" : "•";
+    const txt = /substitution/.test(t) && names.length > 1
+      ? `<span class="in">▲ ${esc(names[0])}</span> <span class="out">▼ ${esc(names[1])}</span>`
+      : `<b>${esc(names[0] || "")}</b>${t === "own-goal" ? " (c.s.c.)" : /penalty/i.test(k.type?.text || "") ? " (pén.)" : ""}${names[1] && k.scoringPlay ? ` <span class="ast">passe : ${esc(names[1])}</span>` : ""}`;
+    return `<div class="tl-row ${home ? "h" : "a"} ${k.scoringPlay ? "goal" : ""}">
+      <div class="tl-side">${home ? txt : ""}</div>
+      <div class="tl-min"><span>${esc(k.clock?.displayValue || "")}</span><em>${icon}</em></div>
+      <div class="tl-side">${home ? "" : txt}</div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+// ---------- plus beaux buts : clips vidéo publiés par ESPN (LaLiga) sur les 14 derniers jours
+const GOAL_LEAGUES = ["esp.1"];
+const clipKind = h => /spectacular|stunning|incredible|great goal|wonder|brilliant|amazing|screamer|golazo/i.test(h) ? "top"
+  : /game highlights/i.test(h) ? "hl" : /save/i.test(h) ? "save" : /scores|goal|back of the net|penalty/i.test(h) ? "goal" : "other";
+const CLIP_LABEL = { top: "⭐ But spectaculaire", goal: "⚽ But", hl: "🎬 Résumé du match", save: "🧤 Arrêt", other: "🎥 Vidéo" };
+function clipFrom(v, ev, slug) {
+  const src = v.links?.source?.HD?.href || v.links?.source?.href;
+  if (!src) return null;
+  return { id: v.id, title: v.headline, kind: clipKind(v.headline || ""), src, thumb: v.thumbnail, dur: v.duration,
+    date: new Date(v.originalPublishDate || v.lastModified || ev?.date || Date.now()), match: ev?.name || "", league: slug, eventId: ev?.id };
+}
+const fmtDur = s => s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : "";
+function clipCard(c) {
+  return `
+    <article class="clip clip-${c.kind}" data-clip="${esc(c.src)}">
+      <div class="clip-media">
+        ${c.thumb ? `<img src="${esc(c.thumb)}" alt="" loading="lazy">` : ""}
+        <span class="clip-play">▶</span>
+        ${c.dur ? `<span class="clip-dur">${fmtDur(c.dur)}</span>` : ""}
+        <span class="clip-tag">${CLIP_LABEL[c.kind]}</span>
+      </div>
+      <div class="clip-body">
+        <b>${esc(c.title)}</b>
+        <small>${esc(c.match)} · ${c.date.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}</small>
+      </div>
+    </article>`;
+}
+/* fil vertical infini (façon Reels) : une vidéo par écran, lecture auto, chargement des semaines précédentes en bas du fil */
+const feed = { filter: "all", items: [], seen: new Set(), win: 0, loading: false, done: false, sound: false, playObs: null, moreObs: null };
+const FEED_FILTERS = [["all", "Tout"], ["top", "⭐ Spectaculaires"], ["goal", "⚽ Buts"], ["hl", "🎬 Résumés"], ["save", "🧤 Arrêts"]];
+const FEED_WINDOW_DAYS = 7, FEED_MAX_WINDOWS = 52;   // on remonte semaine par semaine, jusqu'à un an
+
+async function loadGoalWindow(k) {
+  const now = new Date();
+  const to = new Date(+now - k * FEED_WINDOW_DAYS * 864e5), from = new Date(+to - FEED_WINDOW_DAYS * 864e5);
+  const months = [...new Set([ym(from), ym(to)])];
+  const boards = await pool(GOAL_LEAGUES.flatMap(s => months.map(m => [s, m])), 4,
+    ([s, m]) => getJSON(`${API}/${s}/scoreboard?dates=${m}`, 10 * 60e3).then(d => ({ s, d })));
+  const evs = boards.flatMap(b => (b?.d?.events || []).map(e => ({ s: b.s, e })))
+    .filter(({ e }) => e.status?.type?.completed && new Date(e.date) >= from && new Date(e.date) < to);
+  const sums = await pool(evs, 6, ({ s, e }) => getJSON(`${API}/${s}/summary?event=${e.id}`, 30 * 60e3).then(d => ({ s, e, d })));
+  const out = [];
+  sums.forEach(x => (x?.d?.videos || []).forEach(v => { const c = clipFrom(v, x.e, x.s); if (c) out.push(c); }));
+  return out.sort((a, b) => b.date - a.date);
+}
+
+const feedMatch = c => feed.filter === "all" || c.kind === feed.filter;
+function reelHTML(c) {
+  return `
+    <section class="reel reel-${c.kind}" data-src="${esc(c.src)}">
+      <div class="reel-video">
+        <video poster="${esc(c.thumb || "")}" playsinline loop preload="none" ${feed.sound ? "" : "muted"}></video>
+        <span class="reel-tag">${CLIP_LABEL[c.kind]}</span>
+        ${c.dur ? `<span class="clip-dur">${fmtDur(c.dur)}</span>` : ""}
+        <span class="reel-paused">▶</span>
+      </div>
+      <div class="reel-info">
+        <b>${esc(c.title)}</b>
+        <small>${esc(c.match)} · ${c.date.toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" })}</small>
+        ${c.eventId ? `<button class="ghost reel-match" data-reel-match="${esc(c.league)}|${esc(c.eventId)}">Fiche du match ›</button>` : ""}
+      </div>
+    </section>`;
+}
+
+function renderGoals() {
+  const main = $("#foot-main");
+  Object.assign(feed, { items: [], seen: new Set(), win: 0, loading: false, done: false });
+  main.innerHTML = `
+    <div class="feed-head">
+      <div><h1>Plus beaux buts</h1><div class="sub">LaLiga · vidéos ESPN · fais défiler vers le bas</div></div>
+      <button class="ghost feed-sound" id="feed-sound">${feed.sound ? "🔊 Son activé" : "🔇 Son coupé"}</button>
+    </div>
+    <div class="tabs feed-filters">${FEED_FILTERS.map(([k, n]) => `<button class="tab ${feed.filter === k ? "active" : ""}" data-ffilter="${k}">${n}</button>`).join("")}</div>
+    <div class="feed" id="feed"><div class="feed-more" id="feed-more">${loadingHTML("Recherche des vidéos…")}</div></div>`;
+  const box = $("#feed");
+  feed.playObs?.disconnect(); feed.moreObs?.disconnect();
+  // lecture automatique de la vidéo visible, pause des autres
+  feed.playObs = new IntersectionObserver(entries => entries.forEach(en => {
+    const v = en.target.querySelector("video");
+    if (en.isIntersecting && en.intersectionRatio > .6) {
+      if (!v.src) v.src = en.target.dataset.src;
+      v.muted = !feed.sound;
+      v.play().catch(() => {});
+      en.target.classList.remove("paused");
+    } else if (v.src) v.pause();
+  }), { root: box, threshold: [0, .6, 1] });
+  // chargement de la suite quand on approche du bas
+  feed.moreObs = new IntersectionObserver(en => { if (en[0].isIntersecting) loadMoreGoals(); }, { root: box, rootMargin: "0px 0px 150% 0px" });
+  feed.moreObs.observe($("#feed-more"));
+  main.querySelector(".feed-filters").onclick = e => {
+    const f = e.target.closest("[data-ffilter]");
+    if (!f) return;
+    feed.filter = f.dataset.ffilter;
+    main.querySelectorAll("[data-ffilter]").forEach(b => b.classList.toggle("active", b === f));
+    box.querySelectorAll(".reel").forEach(r => r.remove());
+    box.scrollTop = 0;
+    appendReels(feed.items.filter(feedMatch));
+    loadMoreGoals();
+  };
+  $("#feed-sound").onclick = () => {
+    feed.sound = !feed.sound;
+    $("#feed-sound").textContent = feed.sound ? "🔊 Son activé" : "🔇 Son coupé";
+    box.querySelectorAll("video").forEach(v => { v.muted = !feed.sound; });
+  };
+  box.onclick = e => {
+    const m = e.target.closest("[data-reel-match]");
+    if (m) { const [lg, id] = m.dataset.reelMatch.split("|"); openMatch(lg, id); return; }
+    const r = e.target.closest(".reel");
+    if (!r) return;
+    const v = r.querySelector("video");
+    if (!v.src) v.src = r.dataset.src;
+    if (v.paused) { v.play().catch(() => {}); r.classList.remove("paused"); } else { v.pause(); r.classList.add("paused"); }
+  };
+  loadMoreGoals();
+}
+function appendReels(list) {
+  const box = $("#feed"), more = $("#feed-more");
+  if (!box || !list.length) return;
+  more.insertAdjacentHTML("beforebegin", list.map(reelHTML).join(""));
+  box.querySelectorAll(".reel:not([data-obs])").forEach(r => { r.dataset.obs = "1"; feed.playObs.observe(r); });
+}
+async function loadMoreGoals() {
+  if (feed.loading || feed.done || state.view !== "goals") return;
+  feed.loading = true;
+  let added = 0;
+  while (!feed.done && added < 4) {
+    const k = feed.win++;
+    if (k >= FEED_MAX_WINDOWS) { feed.done = true; break; }
+    const clips = await loadGoalWindow(k);
+    if (state.view !== "goals") { feed.loading = false; return; }
+    const fresh = clips.filter(c => !feed.seen.has(c.id));
+    fresh.forEach(c => { feed.seen.add(c.id); feed.items.push(c); });
+    const show = fresh.filter(feedMatch);
+    appendReels(show);
+    added += show.length;
+  }
+  feed.loading = false;
+  const more = $("#feed-more");
+  if (more) more.innerHTML = feed.done
+    ? `<div class="empty">Tu as tout vu : plus aucune vidéo sur les 12 derniers mois.</div>`
+    : loadingHTML("Chargement des vidéos plus anciennes…");
+  // si la suite est déjà visible (peu de vidéos), on continue
+  if (!feed.done && more && more.getBoundingClientRect().top < window.innerHeight * 2) setTimeout(loadMoreGoals, 50);
+}
+
+/* lecture d'un clip : la vignette devient le lecteur vidéo */
+document.addEventListener("click", e => {
+  const c = e.target.closest("[data-clip]");
+  if (!c || c.classList.contains("playing")) return;
+  e.stopPropagation();
+  document.querySelectorAll(".clip.playing video").forEach(v => v.pause());
+  c.classList.add("playing");
+  c.querySelector(".clip-media").innerHTML = `<video src="${c.dataset.clip}" controls autoplay playsinline></video>`;
+}, true);
+
+// ================================================================= init
+renderSidebar();
+const savedView = store.get("view", "today");
+if (savedView !== "today" && BY_SLUG[savedView]) state.view = savedView;
+renderSidebar();
+renderFoot();
+if (["velo", "jeu"].includes(store.get("sport", "foot"))) setSport(store.get("sport"));

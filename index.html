@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arena 360</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=14">
+</head>
+<body data-sport="foot">
+  <header class="topbar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 48 48" aria-hidden="true">
+        <defs>
+          <linearGradient id="lg-ring" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#38d6ff"/><stop offset=".5" stop-color="#ffd21f"/><stop offset="1" stop-color="#ff4f8b"/></linearGradient>
+        </defs>
+        <path d="M12 9.5l3.2-5.5h3.4l-3.2 5.5z" fill="#38d6ff"/>
+        <path d="M22.3 9.5l3.2-5.5h3.4l-3.2 5.5z" fill="#ffd21f"/>
+        <path d="M32.6 9.5l3.2-5.5h3.4l-3.2 5.5z" fill="#ff4f8b"/>
+        <ellipse cx="24" cy="28" rx="20" ry="12.5" fill="none" stroke="url(#lg-ring)" stroke-width="4.2"/>
+        <path d="M3 28h11.5l3.6-8.5 5.2 16 4.4-11.5 2.6 4H45" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="wordmark"><span class="w-arena">ARENA</span><span class="w-pulse">360</span></span>
+    </div>
+    <nav class="sport-switch" role="tablist">
+      <button class="sport-btn active" data-sport="foot" role="tab">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.2l3.4 2.5-1.3 4h-4.2l-1.3-4z" fill="currentColor"/><path d="M12 7.2V2.6M15.4 9.7l4.3-1.4M14.1 13.7l2.7 3.7M9.9 13.7l-2.7 3.7M8.6 9.7L4.3 8.3" stroke="currentColor" stroke-width="1.5"/></svg>
+        Football
+      </button>
+      <button class="sport-btn" data-sport="velo" role="tab">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="16.5" r="3.8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18.5" cy="16.5" r="3.8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.5 16.5l4-7h6l3 7M9.5 9.5l3 7h-7M15.5 9.5l-1.2-3h-2.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        Cyclisme
+      </button>
+      <button class="sport-btn" data-sport="jeu" role="tab">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="12" height="17" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8" transform="rotate(-8 10 11.5)"/><rect x="8" y="4" width="12" height="17" rx="2.5" fill="currentColor" opacity=".9" transform="rotate(8 14 12.5)"/></svg>
+        Je parie
+      </button>
+    </nav>
+    <div class="clock" id="clock"></div>
+  </header>
+
+  <!-- ============ FOOTBALL ============ -->
+  <section id="foot" class="sport-pane">
+    <aside class="sidebar" id="foot-sidebar">
+      <input class="search" id="league-search" type="search" placeholder="Chercher une compétition…">
+      <div id="league-list"></div>
+    </aside>
+    <main class="main" id="foot-main"></main>
+  </section>
+
+  <!-- ============ CYCLISME ============ -->
+  <section id="velo" class="sport-pane hidden">
+    <main class="main full" id="velo-main"></main>
+  </section>
+
+  <!-- ============ JEU ============ -->
+  <section id="jeu" class="sport-pane hidden">
+    <main class="main full" id="jeu-main"></main>
+  </section>
+
+  <button class="menu-fab" id="menu-fab" aria-label="Compétitions">☰</button>
+
+  <script src="wiki-cups.js?v=14"></script>
+  <script src="cycling-data.js?v=14"></script>
+  <script src="config.js?v=14"></script>
+  <script src="cycling-live.js?v=14"></script>
+  <script src="app.js?v=14"></script>
+  <script src="game.js?v=14"></script>
+  <script src="wiki-leagues.js?v=14"></script>
+  <script src="foot-game.js?v=14"></script>
+</body>
+</html>
