@@ -1370,6 +1370,80 @@ document.addEventListener("click", e => {
   c.querySelector(".clip-media").innerHTML = `<video src="${c.dataset.clip}" controls autoplay playsinline></video>`;
 }, true);
 
+// ---------- installation sur téléphone (bouton « Installer », visible uniquement sur mobile)
+const UA = navigator.userAgent;
+const IS_IOS = /iPhone|iPad|iPod/i.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+const IS_ANDROID = /Android/i.test(UA);
+const IS_STANDALONE = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+let installPrompt = null;
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; });
+window.addEventListener("appinstalled", () => { $("#install-btn").hidden = true; closeInstall(); });
+if ((IS_IOS || IS_ANDROID) && !IS_STANDALONE) $("#install-btn").hidden = false;
+
+const ICON_SHARE = `<svg class="ii" viewBox="0 0 24 24"><path d="M12 3v12M12 3L8 7M12 3l4 4M7 10H5v11h14V10h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_PLUS = `<svg class="ii" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8.5v7M8.5 12h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+const ICON_DOTS = `<svg class="ii" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="19" r="2" fill="currentColor"/></svg>`;
+let installTab = IS_IOS ? "ios" : "android";
+
+function openInstall() {
+  let m = $("#install-modal");
+  if (!m) {
+    m = document.createElement("div");
+    m.id = "install-modal";
+    m.className = "modal";
+    m.addEventListener("click", async e => {
+      if (e.target === m || e.target.closest("[data-iclose]")) return closeInstall();
+      const t = e.target.closest("[data-itab]");
+      if (t) { installTab = t.dataset.itab; drawInstall(); }
+      if (e.target.closest("[data-inow]") && installPrompt) {
+        installPrompt.prompt();
+        const r = await installPrompt.userChoice.catch(() => null);
+        installPrompt = null;
+        if (r?.outcome === "accepted") closeInstall(); else drawInstall();
+      }
+    });
+    document.body.appendChild(m);
+  }
+  drawInstall();
+  m.classList.add("show");
+  document.body.style.overflow = "hidden";
+}
+function closeInstall() { $("#install-modal")?.classList.remove("show"); document.body.style.overflow = ""; }
+function drawInstall() {
+  const step = (n, html) => `<li><span class="istep">${n}</span><div>${html}</div></li>`;
+  const android = `
+    ${installPrompt ? `<button class="cta inow" data-inow>Installer Arena 360 maintenant</button><p class="hint center">Ou à la main :</p>` : ""}
+    <ol class="isteps">
+      ${step(1, `Ouvre ce site dans <b>Chrome</b>.`)}
+      ${step(2, `Appuie sur les <b>trois points</b> ${ICON_DOTS} en haut à droite.`)}
+      ${step(3, `Choisis <b>« Installer l'application »</b> (ou <b>« Ajouter à l'écran d'accueil »</b>).`)}
+      ${step(4, `Confirme avec <b>« Installer »</b>. L'icône Arena 360 apparaît sur ton écran d'accueil.`)}
+    </ol>`;
+  const ios = `
+    <ol class="isteps">
+      ${step(1, `Ouvre ce site dans <b>Safari</b>.`)}
+      ${step(2, `Appuie sur le bouton <b>Partager</b> ${ICON_SHARE} en bas de l'écran (en haut sur iPad).`)}
+      ${step(3, `Fais défiler et choisis <b>« Sur l'écran d'accueil »</b> ${ICON_PLUS}.`)}
+      ${step(4, `Appuie sur <b>« Ajouter »</b> en haut à droite. L'icône Arena 360 apparaît sur ton écran d'accueil.`)}
+    </ol>
+    <p class="hint">Sur iPhone, l'installation passe par Safari. Avec Chrome, le bouton Partager ${ICON_SHARE} est en haut à droite, puis « Ajouter à l'écran d'accueil ».</p>`;
+  $("#install-modal").innerHTML = `
+    <div class="modal-card install-card" role="dialog" aria-modal="true">
+      <button class="modal-x" data-iclose aria-label="Fermer">✕</button>
+      <div class="install-head">
+        <img src="icons/icon-192.png" alt="">
+        <div><h2>Installer Arena 360</h2><p>Ajoute l'appli sur ton écran d'accueil : elle s'ouvre en plein écran, comme une vraie application.</p></div>
+      </div>
+      <div class="tabs install-tabs">
+        <button class="tab ${installTab === "android" ? "active" : ""}" data-itab="android">Android</button>
+        <button class="tab ${installTab === "ios" ? "active" : ""}" data-itab="ios">iPhone / iPad</button>
+      </div>
+      ${installTab === "ios" ? ios : android}
+    </div>`;
+}
+$("#install-btn").addEventListener("click", openInstall);
+
 // ================================================================= init
 renderSidebar();
 const savedView = store.get("view", "today");

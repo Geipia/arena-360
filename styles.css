@@ -980,3 +980,29 @@ table.std { width: 100%; border-collapse: collapse; font-variant-numeric: tabula
   .reel-info b { font-size: 17px; }
   .reel-match { grid-column: 1; grid-row: auto; justify-self: start; }
 }
+
+/* ===== installation sur téléphone ===== */
+.install-btn {
+  display: flex; align-items: center; gap: 6px; flex: none; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 4px;
+  background: var(--accent-soft); color: var(--accent); font: 800 15px/1 var(--display); letter-spacing: 1px; text-transform: uppercase; transform: skewX(var(--skew));
+}
+.install-btn > * { transform: skewX(calc(var(--skew) * -1)); }
+.install-btn svg { width: 17px; height: 17px; }
+.install-btn[hidden] { display: none; }
+.install-card { max-width: 520px; }
+.install-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; padding-right: 40px; }
+.install-head img { width: 64px; height: 64px; border-radius: 15px; flex: none; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+.install-head h2 { margin: 0; font: 900 30px/1 var(--display); text-transform: uppercase; }
+.install-head p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.install-tabs { margin-bottom: 14px; }
+.inow { width: 100%; margin-bottom: 4px; }
+.isteps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.isteps li { display: grid; grid-template-columns: 30px 1fr; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); font-size: 14px; }
+.istep { display: grid; place-items: center; width: 30px; height: 30px; background: var(--accent); color: var(--on-accent); font: 900 17px/1 var(--display); transform: skewX(var(--skew)); }
+.ii { width: 20px; height: 20px; vertical-align: -5px; color: var(--accent); }
+@media (max-width: 560px) {
+  .install-btn { padding: 8px 9px; }
+  .install-btn span { display: none; }
+  .sport-btn svg { display: none; }
+  .topbar { gap: 8px; }
+}
