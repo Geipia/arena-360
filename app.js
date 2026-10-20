@@ -1432,11 +1432,19 @@ const UA = navigator.userAgent;
 const IS_IOS = /iPhone|iPad|iPod/i.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
 const IS_ANDROID = /Android/i.test(UA);
 const IS_STANDALONE = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+// navigateurs intégrés aux applis (lien en bio Instagram, TikTok…) : ils ne savent pas installer d'appli
+const IN_APP = (/Instagram/i.test(UA) && "Instagram") || (/FBAN|FBAV|FB_IAB|FBIOS/i.test(UA) && "Facebook") || (/TikTok|musical_ly|BytedanceWebview/i.test(UA) && "TikTok")
+  || (/Snapchat/i.test(UA) && "Snapchat") || (/LinkedInApp/i.test(UA) && "LinkedIn") || (/Pinterest/i.test(UA) && "Pinterest") || (/\bLine\//i.test(UA) && "Line") || null;
+const IOS_BROWSER = IS_IOS ? (/CriOS/.test(UA) ? "Chrome" : /FxiOS/.test(UA) ? "Firefox" : /EdgiOS/.test(UA) ? "Edge" : /OPT\//.test(UA) ? "Opera" : "Safari") : null;
+const IS_SAMSUNG = /SamsungBrowser/i.test(UA);
+const IN_FRAME = (() => { try { return window.top !== window.self; } catch { return true; } })();
+const SITE_URL = "https://arena.eraz.ovh/";
 let installPrompt = null;
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
-window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; });
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; if ($("#install-modal")?.classList.contains("show")) drawInstall(); });
 window.addEventListener("appinstalled", () => { $("#install-btn").hidden = true; closeInstall(); });
 if ((IS_IOS || IS_ANDROID) && !IS_STANDALONE) $("#install-btn").hidden = false;
+if (IN_FRAME) document.body.insertAdjacentHTML("afterbegin", `<a class="frame-warn" href="${SITE_URL}" target="_top">Arena 360 est affiché dans un cadre. Appuie ici pour l'ouvrir directement (et pouvoir l'installer).</a>`);
 
 const ICON_SHARE = `<svg class="ii" viewBox="0 0 24 24"><path d="M12 3v12M12 3L8 7M12 3l4 4M7 10H5v11h14V10h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ICON_PLUS = `<svg class="ii" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8.5v7M8.5 12h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
@@ -1453,6 +1461,11 @@ function openInstall() {
       if (e.target === m || e.target.closest("[data-iclose]")) return closeInstall();
       const t = e.target.closest("[data-itab]");
       if (t) { installTab = t.dataset.itab; drawInstall(); }
+      if (e.target.closest("[data-icopy]")) {
+        const b = e.target.closest("[data-icopy]");
+        try { await navigator.clipboard.writeText(SITE_URL); b.textContent = "Lien copié ✓"; } catch { b.textContent = SITE_URL; }
+        return;
+      }
       if (e.target.closest("[data-inow]") && installPrompt) {
         installPrompt.prompt();
         const r = await installPrompt.userChoice.catch(() => null);
@@ -1469,17 +1482,31 @@ function openInstall() {
 function closeInstall() { $("#install-modal")?.classList.remove("show"); document.body.style.overflow = ""; }
 function drawInstall() {
   const step = (n, html) => `<li><span class="istep">${n}</span><div>${html}</div></li>`;
+  const copyBtn = `<button class="ghost icopy" data-icopy>Copier le lien du site</button>`;
+  const warn = IN_APP ? `
+    <div class="iwarn">
+      <b>Tu es dans le navigateur d'${esc(IN_APP)}.</b> Il ne permet pas d'installer d'appli : ouvre d'abord le site dans ${IS_IOS ? "Safari" : "Chrome"}.
+      ${IS_ANDROID ? `<a class="cta iopen" href="intent://arena.eraz.ovh/#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(SITE_URL)};end">Ouvrir dans Chrome</a>` : ""}
+      ${IS_IOS ? `<a class="cta iopen" href="x-safari-https://arena.eraz.ovh/">Ouvrir dans Safari</a>` : ""}
+      <span>Si le bouton ne marche pas : appuie sur <b>⋯</b> en haut à droite, puis <b>« Ouvrir dans le navigateur »</b> (ou « Ouvrir dans ${IS_IOS ? "Safari" : "Chrome"} »). Tu peux aussi copier le lien et le coller dans ${IS_IOS ? "Safari" : "Chrome"}.</span>
+      ${copyBtn}
+    </div>` : IN_FRAME ? `
+    <div class="iwarn"><b>Le site est affiché dans un cadre.</b> <a href="${SITE_URL}" target="_top">Ouvre directement arena.eraz.ovh</a>, puis installe-le.</div>` : "";
   const android = `
-    ${installPrompt ? `<button class="cta inow" data-inow>Installer Arena 360 maintenant</button><p class="hint center">Ou à la main :</p>` : ""}
-    <ol class="isteps">
-      ${step(1, `Ouvre ce site dans <b>Chrome</b>.`)}
+    ${installPrompt && !IN_APP ? `<button class="cta inow" data-inow>Installer Arena 360 maintenant</button><p class="hint center">Ou à la main :</p>` : ""}
+    ${IS_SAMSUNG ? `<ol class="isteps">
+      ${step(1, `Dans <b>Samsung Internet</b>, appuie sur le menu <b>☰</b> en bas à droite.`)}
+      ${step(2, `Choisis <b>« Ajouter la page à »</b>, puis <b>« Écran d'accueil »</b>.`)}
+      ${step(3, `Confirme avec <b>« Ajouter »</b>. L'icône Arena 360 apparaît sur ton écran d'accueil.`)}
+    </ol>` : `<ol class="isteps">
+      ${step(1, `Ouvre <b>arena.eraz.ovh</b> dans <b>Chrome</b> (pas dans Instagram ni TikTok).`)}
       ${step(2, `Appuie sur les <b>trois points</b> ${ICON_DOTS} en haut à droite.`)}
-      ${step(3, `Choisis <b>« Installer l'application »</b> (ou <b>« Ajouter à l'écran d'accueil »</b>).`)}
-      ${step(4, `Confirme avec <b>« Installer »</b>. L'icône Arena 360 apparaît sur ton écran d'accueil.`)}
-    </ol>`;
+      ${step(3, `Choisis <b>« Installer l'application »</b> ou <b>« Ajouter à l'écran d'accueil »</b>, puis <b>« Installer »</b>.`)}
+      ${step(4, `L'icône Arena 360 apparaît sur ton écran d'accueil (parfois après quelques secondes).`)}
+    </ol>`}`;
   const ios = `
     <ol class="isteps">
-      ${step(1, `Ouvre ce site dans <b>Safari</b>.`)}
+      ${step(1, IOS_BROWSER && IOS_BROWSER !== "Safari" && !IN_APP ? `Tu es dans <b>${IOS_BROWSER}</b> : ça marche aussi, le bouton Partager ${ICON_SHARE} est dans la barre d'adresse. Sinon, ouvre le site dans <b>Safari</b>.` : `Ouvre <b>arena.eraz.ovh</b> dans <b>Safari</b> (pas dans Instagram ni TikTok).`)}
       ${step(2, `Appuie sur le bouton <b>Partager</b> ${ICON_SHARE} en bas de l'écran (en haut sur iPad).`)}
       ${step(3, `Fais défiler et choisis <b>« Sur l'écran d'accueil »</b> ${ICON_PLUS}.`)}
       ${step(4, `Appuie sur <b>« Ajouter »</b> en haut à droite. L'icône Arena 360 apparaît sur ton écran d'accueil.`)}
@@ -1496,6 +1523,7 @@ function drawInstall() {
         <button class="tab ${installTab === "android" ? "active" : ""}" data-itab="android">Android</button>
         <button class="tab ${installTab === "ios" ? "active" : ""}" data-itab="ios">iPhone / iPad</button>
       </div>
+      ${warn}
       ${installTab === "ios" ? ios : android}
     </div>`;
 }
