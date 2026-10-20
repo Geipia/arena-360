@@ -172,6 +172,7 @@ window.arenaTrack = TRACK;
 function footSection(v) {
   if (v === "today") return "Foot · matchs du jour";
   if (v === "goals") return "Foot · plus beaux buts";
+  if (v === "belges") return "Foot · nos Belges";
   const l = BY_SLUG[v];
   return !l ? "Foot" : l.g === "d1" ? "Foot · championnats" : l.g === "cup" ? "Foot · coupes nationales" : l.g === "nat" ? "Foot · sélections" : "Foot · coupes d'Europe";
 }
@@ -227,6 +228,9 @@ function renderSidebar() {
   let html = `
     <button class="league-item today-item ${state.view === "today" ? "active" : ""}" data-slug="today">
       <span class="ico">📅</span><span class="lname">Tous les matchs du jour<span class="lcountry">Toutes compétitions</span></span>
+    </button>
+    <button class="league-item today-item bel-item ${state.view === "belges" ? "active" : ""}" data-slug="belges">
+      <span class="ico">${flagImg("be")}</span><span class="lname">Nos Belges<span class="lcountry">Buteurs et passeurs belges</span></span>
     </button>
     <button class="league-item today-item ${state.view === "goals" ? "active" : ""}" data-slug="goals">
       <span class="ico">🎬</span><span class="lname">Plus beaux buts<span class="lcountry">Vidéos des derniers matchs</span></span>
@@ -343,7 +347,8 @@ const loadingHTML = (txt = "Chargement des résultats…") => `<div class="loadi
 
 function renderFoot() {
   clearInterval(refreshTimer);
-  if (state.view === "today") renderToday(); else if (state.view === "goals") renderGoals(); else renderLeague();
+  const fm = $("#foot-main"); fm.onclick = null; fm.oninput = null;   // gestionnaires propres à « Nos Belges »
+  if (state.view === "today") renderToday(); else if (state.view === "goals") renderGoals(); else if (state.view === "belges") renderBelges(); else renderLeague();
 }
 
 // ---------- vue "matchs du jour"
@@ -1496,10 +1501,125 @@ function drawInstall() {
 }
 $("#install-btn").addEventListener("click", openInstall);
 
+// ---------- Nos Belges : buteurs et passeurs belges de tous les clubs suivis (belges.json, mis à jour chaque jour)
+const bel = { tab: "goals", kind: "all", q: "" };
+const BEL_TABS = [["goals", "⚽ Buteurs"], ["assists", "🅰️ Passeurs"], ["recent", "🔥 Derniers buts"], ["all", "👥 Tous les Belges"]];
+const BEL_KINDS = [["all", "Toutes compétitions"], ["league", "Championnats"], ["europe", "Coupes d'Europe"], ["cup", "Coupes nationales"]];
+
+function belStat(p, key) {
+  if (bel.kind === "all") return p[key];
+  return p.comps.filter(c => c.kind === bel.kind).reduce((s, c) => s + (c[key] || 0), 0);
+}
+function belAvatar(p, size = "") {
+  return p.photo
+    ? `<img class="bel-photo ${size}" src="${esc(p.photo)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'bel-photo ${size} mono',textContent:'${esc(belInitials(p.name))}'}))">`
+    : `<span class="bel-photo ${size} mono">${esc(belInitials(p.name))}</span>`;
+}
+const belInitials = n => String(n).split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
+
+async function renderBelges() {
+  const main = $("#foot-main");
+  main.innerHTML = `<div class="loading"><div class="spinner"></div>Chargement de nos Belges…</div>`;
+  let d;
+  try { d = await getJSON("belges.json?v=" + new Date().toISOString().slice(0, 13), 30 * 60e3); }
+  catch { main.innerHTML = `<div class="empty">Impossible de charger les Belges pour le moment.</div>`; return; }
+  if (state.view !== "belges") return;
+  const byId = new Map(d.players.map(p => [p.id, p]));
+  const draw = () => {
+    const key = bel.tab === "assists" ? "assists" : "goals";
+    const q = bel.q.trim().toLowerCase();
+    const match = p => !q || (p.name + " " + p.team + " " + p.leagueName).toLowerCase().includes(q);
+    const totGoals = d.players.reduce((s, p) => s + belStat(p, "goals"), 0);
+    const totAssists = d.players.reduce((s, p) => s + belStat(p, "assists"), 0);
+    const scorers = d.players.filter(p => belStat(p, "goals") > 0).length;
+    const upd = new Date(d.generatedAt).toLocaleString("fr-BE", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+
+    let body = "";
+    if (bel.tab === "recent") {
+      const list = d.recent.filter(r => byId.has(r.playerId) && match(byId.get(r.playerId)));
+      body = list.length ? `<div class="bel-recent">${list.map(r => {
+        const p = byId.get(r.playerId), m = r.match;
+        return `<button class="bel-goal" data-bel-match="${esc(r.league)}|${esc(r.eventId)}">
+          ${belAvatar(p, "sm")}
+          <div class="bg-main"><b>${esc(p.name)}</b><span>${esc(r.minute)}${r.pen ? " · pénalty" : ""} · ${esc(r.comp)}</span></div>
+          <div class="bg-match"><img src="${esc(m.homeLogo || "")}" alt=""><span>${esc(m.home)}</span><b>${esc(m.hs)}-${esc(m.as)}</b><span>${esc(m.away)}</span><img src="${esc(m.awayLogo || "")}" alt=""></div>
+          <time>${new Date(r.date).toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" })}</time>
+        </button>`;
+      }).join("")}</div>` : `<div class="empty">Aucun but belge ces 10 derniers jours.</div>`;
+    } else {
+      const sortKey = bel.tab === "all" ? "apps" : key;
+      const list = d.players.filter(match).map(p => ({ p, g: belStat(p, "goals"), a: belStat(p, "assists"), apps: belStat(p, "apps") }))
+        .filter(x => bel.tab === "all" ? x.apps > 0 || bel.kind === "all" : x[key === "goals" ? "g" : "a"] > 0)
+        .sort((x, y) => bel.tab === "all" ? (y.g + y.a) - (x.g + x.a) || y.apps - x.apps
+          : (key === "goals" ? y.g - x.g || y.a - x.a : y.a - x.a || y.g - x.g) || y.apps - x.apps);
+      const big = x => key === "goals" || bel.tab === "all" ? x.g : x.a;
+      const card = (x, i) => {
+        const comps = x.p.comps.filter(c => (bel.kind === "all" || c.kind === bel.kind) && (c.goals || c.assists));
+        return `
+        <article class="bel-row ${i < 3 && bel.tab !== "all" && !q ? "top top" + (i + 1) : ""}">
+          <span class="bel-rank">${i + 1}</span>
+          ${belAvatar(x.p)}
+          <div class="bel-id">
+            <b>${esc(x.p.name)}</b>
+            <span class="bel-club">${x.p.teamLogo ? `<img src="${esc(x.p.teamLogo)}" alt="">` : ""}${esc(x.p.team)}<em>${esc(x.p.leagueName)}</em></span>
+            <span class="bel-comps">${comps.map(c => `<i class="k-${c.kind}">${esc(c.name)} · ${c.goals ? c.goals + " but" + (c.goals > 1 ? "s" : "") : ""}${c.goals && c.assists ? ", " : ""}${c.assists ? c.assists + " passe" + (c.assists > 1 ? "s" : "") + " D" : ""}</i>`).join("")}</span>
+          </div>
+          <div class="bel-nums">
+            ${bel.tab === "all"
+              ? `<div><b>${x.g}</b><small>buts</small></div><div><b>${x.a}</b><small>passes D</small></div><div class="bn-dim"><b>${x.apps}</b><small>matchs</small></div>`
+              : `<div class="bn-main"><b>${big(x)}</b><small>${key === "goals" ? "but" + (big(x) > 1 ? "s" : "") : "passe" + (big(x) > 1 ? "s" : "") + " D"}</small></div>
+                 <div class="bn-dim"><b>${key === "goals" ? x.a : x.g}</b><small>${key === "goals" ? "passes D" : "buts"}</small></div>
+                 <div class="bn-dim"><b>${x.apps}</b><small>matchs</small></div>`}
+          </div>
+        </article>`;
+      };
+      body = list.length ? `<div class="bel-list">${list.slice(0, 150).map(card).join("")}</div>`
+        : `<div class="empty">Aucun Belge ne correspond.</div>`;
+    }
+    main.innerHTML = `
+      <section class="bel-hero">
+        <div class="bel-flag" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="bel-hero-text">
+          <div class="eyebrow">Saison ${esc(d.season)} · ${d.players.length} Belges suivis</div>
+          <h1>Nos Belges</h1>
+          <p>Tous les buts et passes décisives des joueurs belges, dans tous les clubs suivis par Arena : championnats, coupes d'Europe et coupes nationales.</p>
+        </div>
+        <div class="bel-kpis">
+          <div><b>${totGoals}</b><span>buts</span></div>
+          <div><b>${totAssists}</b><span>passes D</span></div>
+          <div><b>${scorers}</b><span>buteurs</span></div>
+        </div>
+      </section>
+      <div class="tabs bel-tabs">${BEL_TABS.map(([k, n]) => `<button class="tab ${bel.tab === k ? "active" : ""}" data-bel-tab="${k}">${n}</button>`).join("")}</div>
+      <div class="toolbar">
+        <input class="search" id="bel-q" type="search" placeholder="Joueur, club ou championnat…" value="${esc(bel.q)}">
+        ${bel.tab !== "recent" ? BEL_KINDS.map(([k, n]) => `<button class="chip ${bel.kind === k ? "on" : ""}" data-bel-kind="${k}">${n}</button>`).join("") : ""}
+      </div>
+      ${body}
+      <p class="source">Données ESPN, mises à jour automatiquement chaque jour · dernière mise à jour ${esc(upd)}. Comprend aussi les deuxièmes divisions anglaise, française, allemande, espagnole, italienne et néerlandaise. Les championnats lus sur Wikipédia (Pologne, Croatie…) ne sont pas inclus.</p>`;
+  };
+  draw();
+  main.onclick = e => {
+    const t = e.target.closest("[data-bel-tab]");
+    if (t) { bel.tab = t.dataset.belTab; draw(); return; }
+    const k = e.target.closest("[data-bel-kind]");
+    if (k) { bel.kind = k.dataset.belKind; draw(); return; }
+    const g = e.target.closest("[data-bel-match]");
+    if (g) { const [lg, id] = g.dataset.belMatch.split("|"); openMatch(lg, id); }
+  };
+  main.oninput = e => {
+    if (e.target.id !== "bel-q") return;
+    bel.q = e.target.value;
+    const pos = e.target.selectionStart;
+    draw();
+    const q = $("#bel-q"); q.focus(); q.setSelectionRange(pos, pos);
+  };
+}
+
 // ================================================================= init
 renderSidebar();
 const savedView = store.get("view", "today");
-if (savedView !== "today" && BY_SLUG[savedView]) state.view = savedView;
+if (savedView !== "today" && (BY_SLUG[savedView] || savedView === "belges")) state.view = savedView;
 renderSidebar();
 renderFoot();
 if (["velo", "jeu"].includes(store.get("sport", "foot"))) setSport(store.get("sport"));

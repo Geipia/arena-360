@@ -1,0 +1,42 @@
+# Met à jour « Nos Belges » (belges.json) deux fois par jour, puis republie le site.
+name: Nos Belges
+
+on:
+  schedule:
+    - cron: "0 5 * * *"     # 7 h (heure belge d'été)
+    - cron: "30 22 * * *"   # 0 h 30, après les matchs du soir
+  workflow_dispatch:         # bouton « Run workflow » pour lancer à la main
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: belges
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Calcul des buts et passes des Belges
+        run: node tools/build-belges.mjs belges.json
+      - name: Enregistrer et republier si ça a changé
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- belges.json; then
+            echo "Rien de nouveau."
+            exit 0
+          fi
+          git config user.name "arena-robot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add belges.json
+          git commit -m "Nos Belges : mise à jour automatique"
+          git push
+          gh api -X POST "repos/${{ github.repository }}/pages/builds" || true
