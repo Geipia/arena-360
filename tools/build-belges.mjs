@@ -39,6 +39,15 @@ async function pool(items, n, fn) {
   await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) { const k = i++; out[k] = await fn(items[k], k); } }));
   return out;
 }
+/* lundi 0 h de la semaine en cours, heure de Bruxelles */
+function mondayBrussels(now = new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Brussels", year: "numeric", month: "2-digit", day: "2-digit", weekday: "short", hour: "2-digit", hourCycle: "h23" })
+    .formatToParts(now).map(p => [p.type, p.value]));
+  const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(parts.weekday);
+  const local = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day - dow));
+  const offsetH = Math.round((Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour) - Math.floor(now / 36e5) * 36e5) / 36e5);
+  return new Date(+local - offsetH * 36e5);
+}
 const statsOf = a => {
   const s = {};
   for (const c of a?.statistics?.splits?.categories || []) for (const x of c.stats || []) s[x.name] = x.value;
@@ -101,6 +110,8 @@ async function scanRoster(slug, teamId) {
   // 4) derniers buts belges (10 derniers jours, toutes compétitions des clubs suivis)
   const belgianIds = new Set(players.keys());
   const recent = [];
+  const weekEvents = new Map();   // matchs depuis lundi qui concernent un club avec des Belges
+  const monday = mondayBrussels();
   const days = [...Array(10)].map((_, k) => { const d = new Date(Date.now() - k * 864e5); return d.toISOString().slice(0, 10).replace(/-/g, ""); });
   const comps = [...new Set([...Object.keys(LEAGUES), ...Object.keys(COMP_NAMES)])];
   await pool(comps.flatMap(c => days.map(d => [c, d])), 10, async ([c, day]) => {
@@ -109,6 +120,8 @@ async function scanRoster(slug, teamId) {
       const comp = e.competitions?.[0];
       if (!comp?.status?.type?.completed && comp?.status?.type?.state !== "in") continue;
       const home = comp.competitors.find(x => x.homeAway === "home"), away = comp.competitors.find(x => x.homeAway === "away");
+      if (comp.status.type.completed && new Date(e.date) >= monday && (withBelgians.has(home.team.id) || withBelgians.has(away.team.id) || (comp.details || []).some(x => belgianIds.has(x.athletesInvolved?.[0]?.id))))
+        weekEvents.set(e.id, { slug: c, e, home, away });
       for (const det of comp.details || []) {
         if (!det.scoringPlay || det.shootout) continue;
         const scorer = det.athletesInvolved?.[0];
@@ -121,6 +134,23 @@ async function scanRoster(slug, teamId) {
     }
   });
   recent.sort((a, b) => new Date(b.date) - new Date(a.date));
+  // 4b) la semaine (depuis lundi, heure belge) : buts ET passes décisives, lus dans la fiche de chaque match
+  const week = { from: monday.toISOString(), goals: [], assists: [] };
+  await pool([...weekEvents.values()], 8, async ({ slug, e, home, away }) => {
+    const d = await get(`${API}/${slug}/summary?event=${e.id}`);
+    const match = { home: home.team.shortDisplayName || home.team.displayName, away: away.team.shortDisplayName || away.team.displayName, hs: home.score, as: away.score,
+      homeLogo: home.team.logo, awayLogo: away.team.logo };
+    for (const k of d?.keyEvents || []) {
+      if (!k.scoringPlay || /shootout/i.test(k.type?.type || "")) continue;
+      const [scorer, assist] = (k.participants || []).map(x => x.athlete?.id);
+      const base = { eventId: e.id, league: slug, comp: LEAGUES[slug] || COMP_NAMES[slug] || slug, date: e.date, minute: k.clock?.displayValue || "", match,
+        pen: /penalty/i.test(k.type?.text || "") };
+      if (scorer && belgianIds.has(scorer) && k.type?.type !== "own-goal") week.goals.push({ playerId: scorer, ...base });
+      if (assist && belgianIds.has(assist)) week.assists.push({ playerId: assist, ...base, scorer: k.participants?.[0]?.athlete?.displayName || "" });
+    }
+  });
+  week.goals.sort((a, b) => new Date(b.date) - new Date(a.date));
+  week.assists.sort((a, b) => new Date(b.date) - new Date(a.date));
   // 5) sortie : joueurs ayant joué cette saison, avec totaux
   const list = [...players.values()].map(p => {
     const c = Object.entries(p.comps).map(([slug, v]) => ({ slug, ...v }));
@@ -130,7 +160,7 @@ async function scanRoster(slug, teamId) {
       team: t.short || t.name || "", teamLogo: t.logo || null, league: p.leagueSlug || t.league || null, leagueName: LEAGUES[p.leagueSlug || t.league] || "" };
   }).filter(p => p.apps || p.goals || p.assists)
     .sort((a, b) => b.goals - a.goals || b.assists - a.assists || b.apps - a.apps);
-  const data = { generatedAt: new Date().toISOString(), season: "2026-27", players: list, recent: recent.slice(0, 60) };
+  const data = { generatedAt: new Date().toISOString(), season: "2026-27", players: list, recent: recent.slice(0, 60), week };
   writeFileSync(OUT, JSON.stringify(data));
-  console.log(`belges.json : ${list.length} joueurs, ${data.players.reduce((s, p) => s + p.goals, 0)} buts, ${recent.length} buts récents, ${Math.round((Date.now() - t0) / 1000)} s`);
+  console.log(`belges.json : ${list.length} joueurs, ${data.players.reduce((s, p) => s + p.goals, 0)} buts, ${recent.length} buts récents, semaine : ${week.goals.length} buts et ${week.assists.length} passes D (${weekEvents.size} matchs), ${Math.round((Date.now() - t0) / 1000)} s`);
 })();

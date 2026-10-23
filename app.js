@@ -998,7 +998,7 @@ const STAT_ALIASES = { possessionPct: ["Possession"], totalShots: ["SHOTS", "Sho
 
 function openMatch(league, id) {
   arenaTrack("Foot · fiche match");
-  mc.league = league; mc.id = id; mc.data = null;
+  mc.league = league; mc.id = id; mc.data = null; mc.tab = null;
   let m = $("#match-modal");
   if (!m) {
     m = document.createElement("div");
@@ -1042,6 +1042,123 @@ async function loadMatch() {
   }
 }
 
+/* --- avant-match : pronostic Arena (force au classement + forme + avantage du terrain → loi de Poisson) --- */
+function teamForm(d, tid) {
+  const t = (d.lastFiveGames || []).find(x => x.team?.id === tid);
+  const evs = (t?.events || []).filter(e => !/friendly/i.test(e.leagueName || e.competitionName || "")).slice(0, 5);
+  const res = evs.map(e => e.gameResult).filter(Boolean);
+  const pts = res.reduce((s, r) => s + (r === "W" ? 3 : r === "D" ? 1 : 0), 0);
+  let gf = 0, ga = 0;
+  evs.forEach(e => {
+    const home = e.homeTeamId === tid, hs = +e.homeTeamScore || 0, as = +e.awayTeamScore || 0;
+    gf += home ? hs : as; ga += home ? as : hs;
+  });
+  return { evs, res, ppg: res.length ? pts / res.length : null, gfpg: evs.length ? gf / evs.length : null, gapg: evs.length ? ga / evs.length : null };
+}
+function teamTable(d, tid) {
+  for (const g of d.standings?.groups || []) {
+    const e = (g.standings?.entries || []).find(x => x.id === tid);
+    if (e) {
+      const st = Object.fromEntries(e.stats.map(s => [s.name, s.value]));
+      return { rank: st.rank, gp: st.gamesPlayed || 0, pts: st.points || 0, gd: st.pointDifferential || 0, w: st.wins, dr: st.ties, l: st.losses,
+        size: g.standings.entries.length, league: g.header || d.standings?.header || "" };
+    }
+  }
+  return null;
+}
+function poisson(l, k) { let p = Math.exp(-l); for (let i = 1; i <= k; i++) p *= l / i; return p; }
+function predictMatch(d, H, A) {
+  const side = t => {
+    const tb = teamTable(d, t.team.id), f = teamForm(d, t.team.id);
+    const avg = 1.37;
+    let s = 0, have = false;
+    if (tb && tb.gp) {
+      const w = tb.gp / (tb.gp + 4);               // peu de matchs joués → on reste prudent
+      s += w * (0.55 * (tb.pts / tb.gp - avg) + 0.22 * (tb.gd / tb.gp));
+      have = true;
+    }
+    if (f.ppg != null) {
+      s += 0.3 * (f.ppg - avg) + 0.12 * ((f.gfpg || 0) - (f.gapg || 0));
+      have = true;
+    }
+    return { s, tb, f, have };
+  };
+  const h = side(H), a = side(A);
+  if (!h.have && !a.have) return null;
+  const diff = h.s - a.s;
+  const lh = Math.max(.2, 1.3 * Math.exp(0.42 * diff) * 1.13);   // avantage du terrain
+  const la = Math.max(.2, 1.3 * Math.exp(-0.42 * diff) * 0.9);
+  let ph = 0, pd = 0, pa = 0, best = { p: 0, h: 0, a: 0 };
+  for (let i = 0; i <= 8; i++) for (let j = 0; j <= 8; j++) {
+    const p = poisson(lh, i) * poisson(la, j);
+    if (i > j) ph += p; else if (i === j) pd += p; else pa += p;
+    if (p > best.p) best = { p, h: i, a: j };
+  }
+  const t = ph + pd + pa;
+  return { ph: ph / t, pd: pd / t, pa: pa / t, lh, la, best, h, a };
+}
+function prematchHTML(d, H, A) {
+  const pr = predictMatch(d, H, A);
+  const nameH = H.team.shortDisplayName || H.team.displayName, nameA = A.team.shortDisplayName || A.team.displayName;
+  const pct = x => Math.round(x * 100);
+  let fav = "";
+  if (pr) {
+    const top = Math.max(pr.ph, pr.pd, pr.pa);
+    fav = top === pr.pd || top < .42 ? "Match très serré : aucun favori net"
+      : `Favori : <b>${esc(top === pr.ph ? nameH : nameA)}</b>${top > .6 ? " (large favori)" : ""}`;
+  }
+  const formBadges = f => f.res.length ? f.res.map(r => `<i class="fm-${r === "W" ? "w" : r === "D" ? "d" : "l"}">${r === "W" ? "V" : r === "D" ? "N" : "D"}</i>`).join("") : `<span class="muted">—</span>`;
+  const row = (label, vh, va, better = "high") => {
+    if (vh == null && va == null) return "";
+    const nh = parseFloat(vh), na = parseFloat(va);
+    const hb = !isNaN(nh) && !isNaN(na) && (better === "high" ? nh > na : nh < na), ab = !isNaN(nh) && !isNaN(na) && (better === "high" ? na > nh : na < nh);
+    return `<div class="pm-row"><b class="${hb ? "lead" : ""}">${vh ?? "—"}</b><span>${label}</span><b class="${ab ? "lead" : ""}">${va ?? "—"}</b></div>`;
+  };
+  const th = pr?.h.tb, ta = pr?.a.tb, fh = pr?.h.f || teamForm(d, H.team.id), fa = pr?.a.f || teamForm(d, A.team.id);
+  const r1 = x => x == null ? null : (Math.round(x * 10) / 10).toString().replace(".", ",");
+  const last5 = (f, tid) => f.evs.length ? f.evs.map(e => `
+      <div class="l5"><i class="fm-${e.gameResult === "W" ? "w" : e.gameResult === "D" ? "d" : "l"}">${e.gameResult === "W" ? "V" : e.gameResult === "D" ? "N" : "D"}</i>
+        <span>${e.atVs === "@" ? "à" : "vs"} ${esc(e.opponent?.displayName || "")}</span><b>${esc(e.score || "")}</b></div>`).join("") : `<p class="muted">Pas de match récent.</p>`;
+  const h2h = (d.seasonseries || []).find(x => /head/i.test(x.type || "")) || d.seasonseries?.[0];
+  const h2hEvs = (h2h?.events || []).filter(e => e.statusType?.completed !== false && e.status !== "pre").slice(0, 5);
+  let wH = 0, wA = 0, dr = 0;
+  h2hEvs.forEach(e => { const w = (e.competitors || []).find(c => c.winner); if (!w) dr++; else if (w.team?.id === H.team.id) wH++; else wA++; });
+  return `
+    ${pr ? `<section class="pm-card">
+      <div class="pm-title">Pronostic Arena</div>
+      <div class="pm-probs">
+        <div><b>${pct(pr.ph)}%</b><span>${esc(nameH)}</span></div>
+        <div><b>${pct(pr.pd)}%</b><span>Nul</span></div>
+        <div><b>${pct(pr.pa)}%</b><span>${esc(nameA)}</span></div>
+      </div>
+      <div class="pm-bar"><i class="h" style="width:${pct(pr.ph)}%"></i><i class="d" style="width:${pct(pr.pd)}%"></i><i class="a" style="width:${pct(pr.pa)}%"></i></div>
+      <p class="pm-fav">${fav} · score le plus probable : <b>${pr.best.h}-${pr.best.a}</b></p>
+      <p class="hint">Calculé par Arena à partir du classement, de la forme sur 5 matchs et de l'avantage du terrain. Ce n'est qu'une estimation, pas une certitude.</p>
+    </section>` : ""}
+    <section class="pm-card">
+      <div class="pm-title">Face à face</div>
+      <div class="pm-head"><span>${esc(nameH)}</span><span></span><span>${esc(nameA)}</span></div>
+      ${th || ta ? row("Classement", th ? th.rank + (th.rank === 1 ? "er" : "e") : null, ta ? ta.rank + (ta.rank === 1 ? "er" : "e") : null, "low") : ""}
+      ${row("Points", th?.pts, ta?.pts)}
+      ${row("Points par match", r1(th && th.gp ? th.pts / th.gp : null), r1(ta && ta.gp ? ta.pts / ta.gp : null))}
+      ${row("Différence de buts", th ? (th.gd > 0 ? "+" : "") + th.gd : null, ta ? (ta.gd > 0 ? "+" : "") + ta.gd : null)}
+      ${row("Victoires / nuls / défaites", th ? `${th.w}/${th.dr}/${th.l}` : null, ta ? `${ta.w}/${ta.dr}/${ta.l}` : null, "none")}
+      ${row("Buts marqués (5 derniers)", r1(fh.gfpg), r1(fa.gfpg))}
+      ${row("Buts encaissés (5 derniers)", r1(fh.gapg), r1(fa.gapg), "low")}
+      <div class="pm-row"><b class="pm-form">${formBadges(fh)}</b><span>Forme</span><b class="pm-form">${formBadges(fa)}</b></div>
+    </section>
+    <div class="pm-grid">
+      <section class="pm-card"><div class="pm-title">${esc(nameH)} · 5 derniers matchs</div>${last5(fh)}</section>
+      <section class="pm-card"><div class="pm-title">${esc(nameA)} · 5 derniers matchs</div>${last5(fa)}</section>
+    </div>
+    ${h2hEvs.length ? `<section class="pm-card">
+      <div class="pm-title">Confrontations directes · ${h2hEvs.length} dernières</div>
+      <div class="pm-h2h"><div><b>${wH}</b><span>${esc(nameH)}</span></div><div><b>${dr}</b><span>nuls</span></div><div><b>${wA}</b><span>${esc(nameA)}</span></div></div>
+      ${h2hEvs.map(e => { const ch = (e.competitors || []).find(c => c.homeAway === "home"), ca = (e.competitors || []).find(c => c.homeAway === "away");
+        return `<div class="l5"><span>${new Date(e.date).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}</span><span>${esc(ch?.team?.displayName || "")}</span><b>${esc(ch?.score ?? "")}-${esc(ca?.score ?? "")}</b><span>${esc(ca?.team?.displayName || "")}</span></div>`; }).join("")}
+    </section>` : ""}`;
+}
+
 function drawMatch() {
   const d = mc.data;
   if (!d) return;
@@ -1050,6 +1167,7 @@ function drawMatch() {
   const H = side("home"), A = side("away");
   const st = comp.status.type;
   const live = st.state === "in";
+  if (!mc.tab) mc.tab = st.state === "pre" ? "prematch" : "lineups";
   const ev = parseEvent({ id: mc.id, date: comp.date, status: comp.status, competitions: [{ ...comp, details: [] }] }, mc.league);
   const l = Object.values(BY_SLUG).find(x => x.s === mc.league || x.sub?.some(s => s[0] === mc.league));
   const keyEv = d.keyEvents || [];
@@ -1079,6 +1197,7 @@ function drawMatch() {
     <div class="mc-info">${[venue && "🏟 " + esc(venue), att ? `${Number(att).toLocaleString("fr-BE")} spectateurs` : "", ref && "Arbitre : " + esc(ref)].filter(Boolean).join(" · ")}
       ${played ? `<a class="yt" href="https://www.youtube.com/results?search_query=${encodeURIComponent(`${H.team.displayName} ${A.team.displayName} résumé ${new Date(comp.date).getFullYear()}`)}" target="_blank" rel="noopener">▶ Résumé sur YouTube</a>` : ""}</div>
     <div class="tabs mc-tabs">
+      <button class="tab ${mc.tab === "prematch" ? "active" : ""}" data-mctab="prematch">${played ? "Pronostic & forme" : "Avant-match"}</button>
       <button class="tab ${mc.tab === "lineups" ? "active" : ""}" data-mctab="lineups">Compositions</button>
       <button class="tab ${mc.tab === "stats" ? "active" : ""}" data-mctab="stats">Statistiques</button>
       <button class="tab ${mc.tab === "events" ? "active" : ""}" data-mctab="events">Temps forts</button>
@@ -1087,7 +1206,8 @@ function drawMatch() {
     </div>`;
 
   let body = "";
-  if (mc.tab === "lineups") body = lineupsHTML(d, H, A);
+  if (mc.tab === "prematch") body = prematchHTML(d, H, A);
+  else if (mc.tab === "lineups") body = lineupsHTML(d, H, A);
   else if (mc.tab === "stats") body = statsHTML(d, H, A);
   else if (mc.tab === "videos") body = `<div class="clips">${(d.videos || []).map(v => clipFrom(v, { name: "", date: comp.date }, mc.league)).filter(Boolean).map(clipCard).join("")}</div>`;
   else body = eventsHTML(keyEv, H, A);
@@ -1530,7 +1650,25 @@ function drawInstall() {
 $("#install-btn").addEventListener("click", openInstall);
 
 // ---------- Nos Belges : buteurs et passeurs belges de tous les clubs suivis (belges.json, mis à jour chaque jour)
-const bel = { tab: "goals", kind: "all", q: "" };
+const bel = { tab: "goals", kind: "all", q: "", period: "season" };
+const slugKind = sl => sl.startsWith("uefa.") ? "europe" : /\.[12]$/.test(sl) ? "league" : "cup";
+/* joueurs « de la semaine » : mêmes champs que la saison, calculés à partir des buts et passes depuis lundi */
+function weekPlayers(d, byId) {
+  const m = new Map();
+  const add = (ev, k) => {
+    const base = byId.get(ev.playerId); if (!base) return;
+    const p = m.get(ev.playerId) || { ...base, comps: [], goals: 0, assists: 0, apps: 0, events: [] };
+    p[k]++;
+    let c = p.comps.find(x => x.slug === ev.league);
+    if (!c) { c = { slug: ev.league, name: ev.comp, kind: slugKind(ev.league), goals: 0, assists: 0, apps: 0 }; p.comps.push(c); }
+    c[k]++;
+    p.events.push({ ...ev, type: k });
+    m.set(ev.playerId, p);
+  };
+  (d.week?.goals || []).forEach(e => add(e, "goals"));
+  (d.week?.assists || []).forEach(e => add(e, "assists"));
+  return [...m.values()];
+}
 const BEL_TABS = [["goals", "⚽ Buteurs"], ["assists", "🅰️ Passeurs"], ["recent", "🔥 Derniers buts"], ["all", "👥 Tous les Belges"]];
 const BEL_KINDS = [["all", "Toutes compétitions"], ["league", "Championnats"], ["europe", "Coupes d'Europe"], ["cup", "Coupes nationales"]];
 
@@ -1553,31 +1691,37 @@ async function renderBelges() {
   catch { main.innerHTML = `<div class="empty">Impossible de charger les Belges pour le moment.</div>`; return; }
   if (state.view !== "belges") return;
   const byId = new Map(d.players.map(p => [p.id, p]));
+  const weekList = weekPlayers(d, byId);
+  const weekFrom = d.week ? new Date(d.week.from) : null;
   const draw = () => {
+    const isWeek = bel.period === "week";
+    const src = isWeek ? weekList : d.players;
     const key = bel.tab === "assists" ? "assists" : "goals";
     const q = bel.q.trim().toLowerCase();
     const match = p => !q || (p.name + " " + p.team + " " + p.leagueName).toLowerCase().includes(q);
-    const totGoals = d.players.reduce((s, p) => s + belStat(p, "goals"), 0);
-    const totAssists = d.players.reduce((s, p) => s + belStat(p, "assists"), 0);
-    const scorers = d.players.filter(p => belStat(p, "goals") > 0).length;
+    const totGoals = src.reduce((s, p) => s + belStat(p, "goals"), 0);
+    const totAssists = src.reduce((s, p) => s + belStat(p, "assists"), 0);
+    const scorers = src.filter(p => belStat(p, "goals") > 0).length;
     const upd = new Date(d.generatedAt).toLocaleString("fr-BE", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 
     let body = "";
     if (bel.tab === "recent") {
-      const list = d.recent.filter(r => byId.has(r.playerId) && match(byId.get(r.playerId)));
+      const evs = isWeek ? [...(d.week?.goals || []).map(e => ({ ...e, type: "goals" })), ...(d.week?.assists || []).map(e => ({ ...e, type: "assists" }))]
+        .sort((a, b) => new Date(b.date) - new Date(a.date)) : d.recent;
+      const list = evs.filter(r => byId.has(r.playerId) && match(byId.get(r.playerId)));
       body = list.length ? `<div class="bel-recent">${list.map(r => {
         const p = byId.get(r.playerId), m = r.match;
         return `<button class="bel-goal" data-bel-match="${esc(r.league)}|${esc(r.eventId)}">
           ${belAvatar(p, "sm")}
-          <div class="bg-main"><b>${esc(p.name)}</b><span>${esc(r.minute)}${r.pen ? " · pénalty" : ""} · ${esc(r.comp)}</span></div>
+          <div class="bg-main"><b>${esc(p.name)}</b><span>${r.type === "assists" ? `🅰️ Passe D pour ${esc(r.scorer || "")} · ` : "⚽ "}${esc(r.minute)}${r.pen ? " · pénalty" : ""} · ${esc(r.comp)}</span></div>
           <div class="bg-match"><img src="${esc(m.homeLogo || "")}" alt=""><span>${esc(m.home)}</span><b>${esc(m.hs)}-${esc(m.as)}</b><span>${esc(m.away)}</span><img src="${esc(m.awayLogo || "")}" alt=""></div>
           <time>${new Date(r.date).toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" })}</time>
         </button>`;
-      }).join("")}</div>` : `<div class="empty">Aucun but belge ces 10 derniers jours.</div>`;
+      }).join("")}</div>` : `<div class="empty">${isWeek ? "Aucun but ni passe décisive belge depuis lundi pour l'instant." : "Aucun but belge ces 10 derniers jours."}</div>`;
     } else {
       const sortKey = bel.tab === "all" ? "apps" : key;
-      const list = d.players.filter(match).map(p => ({ p, g: belStat(p, "goals"), a: belStat(p, "assists"), apps: belStat(p, "apps") }))
-        .filter(x => bel.tab === "all" ? x.apps > 0 || bel.kind === "all" : x[key === "goals" ? "g" : "a"] > 0)
+      const list = src.filter(match).map(p => ({ p, g: belStat(p, "goals"), a: belStat(p, "assists"), apps: belStat(p, "apps") }))
+        .filter(x => bel.tab === "all" ? (isWeek ? x.g + x.a > 0 : x.apps > 0 || bel.kind === "all") : x[key === "goals" ? "g" : "a"] > 0)
         .sort((x, y) => bel.tab === "all" ? (y.g + y.a) - (x.g + x.a) || y.apps - x.apps
           : (key === "goals" ? y.g - x.g || y.a - x.a : y.a - x.a || y.g - x.g) || y.apps - x.apps);
       const big = x => key === "goals" || bel.tab === "all" ? x.g : x.a;
@@ -1590,25 +1734,27 @@ async function renderBelges() {
           <div class="bel-id">
             <b>${esc(x.p.name)}</b>
             <span class="bel-club">${x.p.teamLogo ? `<img src="${esc(x.p.teamLogo)}" alt="">` : ""}${esc(x.p.team)}<em>${esc(x.p.leagueName)}</em></span>
-            <span class="bel-comps">${comps.map(c => `<i class="k-${c.kind}">${esc(c.name)} · ${c.goals ? c.goals + " but" + (c.goals > 1 ? "s" : "") : ""}${c.goals && c.assists ? ", " : ""}${c.assists ? c.assists + " passe" + (c.assists > 1 ? "s" : "") + " D" : ""}</i>`).join("")}</span>
+            <span class="bel-comps">${isWeek
+              ? (x.p.events || []).filter(ev => bel.kind === "all" || slugKind(ev.league) === bel.kind).map(ev => `<i class="k-${slugKind(ev.league)} ev" data-bel-match="${esc(ev.league)}|${esc(ev.eventId)}">${ev.type === "goals" ? "⚽" : "🅰️"} ${esc(ev.minute)} · ${esc(ev.match.home)} ${esc(ev.match.hs)}-${esc(ev.match.as)} ${esc(ev.match.away)}</i>`).join("")
+              : comps.map(c => `<i class="k-${c.kind}">${esc(c.name)} · ${c.goals ? c.goals + " but" + (c.goals > 1 ? "s" : "") : ""}${c.goals && c.assists ? ", " : ""}${c.assists ? c.assists + " passe" + (c.assists > 1 ? "s" : "") + " D" : ""}</i>`).join("")}</span>
           </div>
           <div class="bel-nums">
             ${bel.tab === "all"
-              ? `<div><b>${x.g}</b><small>buts</small></div><div><b>${x.a}</b><small>passes D</small></div><div class="bn-dim"><b>${x.apps}</b><small>matchs</small></div>`
+              ? `<div><b>${x.g}</b><small>buts</small></div><div><b>${x.a}</b><small>passes D</small></div>${isWeek ? "" : `<div class="bn-dim"><b>${x.apps}</b><small>matchs</small></div>`}`
               : `<div class="bn-main"><b>${big(x)}</b><small>${key === "goals" ? "but" + (big(x) > 1 ? "s" : "") : "passe" + (big(x) > 1 ? "s" : "") + " D"}</small></div>
                  <div class="bn-dim"><b>${key === "goals" ? x.a : x.g}</b><small>${key === "goals" ? "passes D" : "buts"}</small></div>
-                 <div class="bn-dim"><b>${x.apps}</b><small>matchs</small></div>`}
+                 ${isWeek ? "" : `<div class="bn-dim"><b>${x.apps}</b><small>matchs</small></div>`}`}
           </div>
         </article>`;
       };
       body = list.length ? `<div class="bel-list">${list.slice(0, 150).map(card).join("")}</div>`
-        : `<div class="empty">Aucun Belge ne correspond.</div>`;
+        : `<div class="empty">${isWeek ? "Pas encore de Belge dans ce classement depuis lundi. Reviens après les matchs du week-end !" : "Aucun Belge ne correspond."}</div>`;
     }
     main.innerHTML = `
       <section class="bel-hero">
         <div class="bel-flag" aria-hidden="true"><i></i><i></i><i></i></div>
         <div class="bel-hero-text">
-          <div class="eyebrow">Saison ${esc(d.season)} · ${d.players.length} Belges suivis</div>
+          <div class="eyebrow">${isWeek ? `Cette semaine · depuis lundi ${weekFrom ? weekFrom.toLocaleDateString("fr-BE", { day: "numeric", month: "long", timeZone: "Europe/Brussels" }) : ""}` : `Saison ${esc(d.season)} · ${d.players.length} Belges suivis`}</div>
           <h1>Nos Belges</h1>
           <p>Tous les buts et passes décisives des joueurs belges, dans tous les clubs suivis par Arena : championnats, coupes d'Europe et coupes nationales.</p>
         </div>
@@ -1618,6 +1764,10 @@ async function renderBelges() {
           <div><b>${scorers}</b><span>buteurs</span></div>
         </div>
       </section>
+      <div class="gmode bel-period" role="tablist">
+        <button class="${!isWeek ? "on" : ""}" data-bel-period="season">Toute la saison</button>
+        <button class="${isWeek ? "on" : ""}" data-bel-period="week">Cette semaine</button>
+      </div>
       <div class="tabs bel-tabs">${BEL_TABS.map(([k, n]) => `<button class="tab ${bel.tab === k ? "active" : ""}" data-bel-tab="${k}">${n}</button>`).join("")}</div>
       <div class="toolbar">
         <input class="search" id="bel-q" type="search" placeholder="Joueur, club ou championnat…" value="${esc(bel.q)}">
@@ -1628,6 +1778,8 @@ async function renderBelges() {
   };
   draw();
   main.onclick = e => {
+    const pr = e.target.closest("[data-bel-period]");
+    if (pr) { bel.period = pr.dataset.belPeriod; draw(); return; }
     const t = e.target.closest("[data-bel-tab]");
     if (t) { bel.tab = t.dataset.belTab; draw(); return; }
     const k = e.target.closest("[data-bel-kind]");

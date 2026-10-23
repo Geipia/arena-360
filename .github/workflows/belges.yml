@@ -4,6 +4,7 @@ name: Nos Belges
 on:
   schedule:
     - cron: "0 5 * * *"     # 7 h (heure belge d'été)
+    - cron: "0 17 * * *"    # 19 h, après les matchs de l'après-midi
     - cron: "30 22 * * *"   # 0 h 30, après les matchs du soir
   workflow_dispatch:         # bouton « Run workflow » pour lancer à la main
 
