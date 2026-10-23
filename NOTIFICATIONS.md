@@ -8,7 +8,7 @@ Tu as besoin du fichier **CLES-NOTIFICATIONS-PRIVEES.txt** (dans le dossier `cla
 
 1. Ouvre ton projet sur **supabase.com** → menu de gauche **Edge Functions**.
 2. Clique sur **Deploy a new function** → **Via Editor**.
-3. Nom de la fonction : `arena-push` (exactement).
+3. Nom de la fonction : Supabase lui donne un nom (chez nous : `smart-endpoint`). Si le nom est différent, remplace-le dans l'adresse du robot dans `supabase-push.sql`.
 4. Efface le code d'exemple, puis colle **tout** le contenu du fichier `supabase/functions/arena-push/index.ts` (dans `sport-app`).
 5. Clique sur **Deploy function**. Attends le message de succès.
 

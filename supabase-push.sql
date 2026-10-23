@@ -51,7 +51,7 @@ create extension if not exists pg_net with schema extensions;
 select cron.unschedule('arena-push') where exists (select 1 from cron.job where jobname = 'arena-push');
 select cron.schedule('arena-push', '* * * * *', $cron$
   select net.http_post(
-    url     := 'https://ljlshnxllwrgkrhqtyth.supabase.co/functions/v1/arena-push',
+    url     := 'https://ljlshnxllwrgkrhqtyth.supabase.co/functions/v1/smart-endpoint',
     headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqbHNobnhsbHdyZ2tyaHF0eXRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0MDU0ODYsImV4cCI6MjEwNzk4MTQ4Nn0.90tbSczln_Y7i-5I99fpLPIWa8Uln-O_lasdGAFImJs"}'::jsonb,
     body    := '{}'::jsonb,
     timeout_milliseconds := 55000
