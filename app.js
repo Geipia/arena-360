@@ -1796,6 +1796,24 @@ async function renderBelges() {
   };
 }
 
+// ---------- bouton « Admin » : visible seulement si ce téléphone est connecté avec un compte admin
+(async () => {
+  const C = window.ARENA_CONFIG || {};
+  if (!C.supabaseUrl) return;
+  let session = null;
+  try {
+    const ref = new URL(C.supabaseUrl).hostname.split(".")[0];
+    session = JSON.parse(localStorage.getItem(`sb-${ref}-auth-token`) || "null");
+  } catch {}
+  if (!session?.access_token) return;
+  try {
+    const r = await fetch(`${C.supabaseUrl}/rest/v1/rpc/arena_is_admin`, {
+      method: "POST", headers: { apikey: C.supabaseAnonKey, Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" }, body: "{}",
+    });
+    if (r.ok && (await r.json()) === true) $("#admin-btn").hidden = false;
+  } catch {}
+})();
+
 // ================================================================= init
 renderSidebar();
 const savedView = store.get("view", "today");
