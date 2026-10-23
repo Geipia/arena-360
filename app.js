@@ -235,7 +235,7 @@ function renderSidebar() {
       <span class="ico">${flagImg("be")}</span><span class="lname">Nos Belges<span class="lcountry">Buteurs et passeurs belges</span></span>
     </button>
     <button class="league-item today-item ${state.view === "uefa" ? "active" : ""}" data-slug="uefa">
-      <span class="ico">🏆</span><span class="lname">Coefficients UEFA<span class="lcountry">Classement des pays et des clubs</span></span>
+      <span class="ico">🏆</span><span class="lname">Coefficients UEFA<span class="lcountry">Pays, clubs et équipes nationales</span></span>
     </button>
     <button class="league-item today-item ${state.view === "notifs" ? "active" : ""}" data-slug="notifs">
       <span class="ico">🔔</span><span class="lname">Mes notifications<span class="lcountry">Buts et résultats de tes équipes</span></span>
@@ -1808,7 +1808,7 @@ async function renderBelges() {
 }
 
 // ---------- Coefficients UEFA : classement des pays et des clubs (uefa.json, mis à jour chaque jour)
-const uefa = { tab: "assoc", period: "5y", country: "all", q: "" };
+const uefa = { tab: "assoc", period: "5y", country: "all", q: "", zone: "europe" };
 const UEFA_ISO = { ...IOC, ENG: "gb-eng", SCO: "gb-sct", WAL: "gb-wls", NIR: "gb-nir", LVA: "lv", LIE: "li", FRO: "fo", MLT: "mt", GIB: "gi", SMR: "sm" };
 const UEFA_FR = { ENG: "Angleterre", SCO: "Écosse", WAL: "Pays de Galles", NIR: "Irlande du Nord", KOS: "Kosovo" };
 const REGION_FR = new Intl.DisplayNames(["fr"], { type: "region" });
@@ -1836,6 +1836,7 @@ async function renderUefa() {
   const bel = d.assoc.find(a => a.code === "BEL");
   const belNow = rankBy(d.assoc, a => a.seasons[cur] || 0).find(a => a.code === "BEL")._p;
   const brugge = d.clubs.find(c => c.name === "Club Brugge");
+  const belFifa = d.fifa?.teams.find(t => t.code === "BEL");
   const flag = c => flagImg(UEFA_ISO[c]);
   const trend = t => t === "UP" ? `<i class="tr up" title="en hausse">▲</i>` : t === "DOWN" ? `<i class="tr down" title="en baisse">▼</i>` : "";
 
@@ -1884,6 +1885,32 @@ async function renderUefa() {
           </tr>`).join("")}</tbody></table></div>`
         : `<div class="empty">Aucun club ne correspond.</div>`}`;
     }
+    if (uefa.tab === "nat") {
+      const F = d.fifa;
+      if (!F) body = `<div class="empty">Le classement FIFA n'est pas disponible pour le moment.</div>`;
+      else {
+        const list = F.teams.filter(t => uefa.zone === "world" || t.conf === "UEFA");
+        const max = list[0]?.pts || 1, min = Math.min(...list.map(t => t.pts));
+        const move = t => { const m = (t.prev || t.rank) - t.rank; return m > 0 ? `<i class="tr up">▲${m}</i>` : m < 0 ? `<i class="tr down">▼${-m}</i>` : ""; };
+        const diff = t => { const v = Math.round((t.pts - t.prevPts) * 100) / 100; return v ? `<span class="${v > 0 ? "plus" : "minus"}">${v > 0 ? "+" : ""}${fmtCoef(v, 2)}</span>` : `<span class="dim">=</span>`; };
+        body = `
+        <div class="toolbar">
+          <button class="chip ${uefa.zone === "europe" ? "on" : ""}" data-uefa-zone="europe">${flagImg("eu")} Europe</button>
+          <button class="chip ${uefa.zone === "world" ? "on" : ""}" data-uefa-zone="world">🌍 Monde</button>
+        </div>
+        <div class="table-wrap"><table class="uefa-table nat-t">
+          <thead><tr><th>#</th><th class="l">Équipe nationale</th>${uefa.zone === "europe" ? `<th>Monde</th>` : `<th>Zone</th>`}<th>Points</th><th>Évolution</th></tr></thead>
+          <tbody>${list.map((t, i) => `
+            <tr class="${t.code === "BEL" ? "me" : ""}">
+              <td class="pos">${uefa.zone === "europe" ? i + 1 : t.rank}${move(t)}</td>
+              <td class="l"><div class="uc"><img class="flag" src="https://api.fifa.com/api/v3/picture/flags-sq-2/${esc(t.code)}" alt="" loading="lazy"><b>${esc(t.name)}</b></div><div class="ubar"><i style="width:${Math.max(2, (t.pts - min * .9) / (max - min * .9) * 100)}%"></i></div></td>
+              <td class="clubs">${uefa.zone === "europe" ? `${t.rank}<sup>e</sup>` : esc(t.conf)}</td>
+              <td class="tot">${fmtCoef(t.pts, 2)}</td>
+              <td class="clubs nat-diff">${diff(t)}</td>
+            </tr>`).join("")}</tbody></table></div>
+        <p class="hint">Classement mondial FIFA des équipes nationales, publié le ${new Date(F.date).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}${F.next ? ` · prochain classement le ${new Date(F.next).toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}` : ""}. Les points montent ou descendent après chaque match officiel, selon le résultat et la force de l'adversaire. « Évolution » : points gagnés ou perdus depuis le classement précédent.</p>`;
+      }
+    }
     const how = `
       <section class="nt-card uefa-how">
         <div class="pm-title">Les points d'un club, à chaque match européen</div>
@@ -1906,32 +1933,35 @@ async function renderUefa() {
         <div class="bel-hero-text">
           <div class="eyebrow">Saison ${uefaSeason(cur)} · classement officiel UEFA</div>
           <h1>Coefficients UEFA</h1>
-          <p>Chaque victoire d'un club en coupe d'Europe rapporte des points à son club et à son pays. Le classement des pays décide combien de clubs chaque pays envoie en coupe d'Europe.</p>
+          <p>Chaque victoire d'un club en coupe d'Europe rapporte des points à son club et à son pays. Le classement des pays décide combien de clubs chaque pays envoie en coupe d'Europe. Et pour les équipes nationales : le classement FIFA.</p>
         </div>
         <div class="bel-kpis">
-          <div><b>${bel.pos}<sup>e</sup></b><span>${flagImg("be")} 5 saisons</span></div>
-          <div><b>${belNow}<sup>e</sup></b><span>cette saison</span></div>
-          <div><b>${fmtCoef(bel.seasons[cur] || 0, 1)}</b><span>pts ${uefaSeason(cur)}</span></div>
+          <div><b>${bel.pos}<sup>e</sup></b><span>${flagImg("be")} UEFA 5 saisons</span></div>
+          <div><b>${belNow}<sup>e</sup></b><span>UEFA cette saison</span></div>
+          ${belFifa ? `<div><b>${belFifa.rank}<sup>e</sup></b><span>Diables rouges · FIFA</span></div>` : `<div><b>${fmtCoef(bel.seasons[cur] || 0, 1)}</b><span>pts ${uefaSeason(cur)}</span></div>`}
         </div>
       </section>
-      ${uefa.tab === "how" ? "" : `<div class="gmode bel-period" role="tablist">
+      ${uefa.tab === "how" || uefa.tab === "nat" ? "" : `<div class="gmode bel-period" role="tablist">
         <button class="${!isNow ? "on" : ""}" data-uefa-period="5y">Sur 5 saisons</button>
         <button class="${isNow ? "on" : ""}" data-uefa-period="now">Cette saison</button>
       </div>`}
       <div class="tabs bel-tabs">
         <button class="tab ${uefa.tab === "assoc" ? "active" : ""}" data-uefa-tab="assoc">🌍 Pays</button>
         <button class="tab ${uefa.tab === "clubs" ? "active" : ""}" data-uefa-tab="clubs">🛡️ Clubs</button>
+        <button class="tab ${uefa.tab === "nat" ? "active" : ""}" data-uefa-tab="nat">🏳️ Équipes nationales</button>
         <button class="tab ${uefa.tab === "how" ? "active" : ""}" data-uefa-tab="how">❓ Comment ça marche</button>
       </div>
       ${uefa.tab === "how" ? how : body}
-      <p class="source">Données officielles UEFA, mises à jour automatiquement chaque jour · dernière mise à jour UEFA ${esc(upd)}.</p>`;
+      <p class="source">${uefa.tab === "nat" ? "Données officielles FIFA" : `Données officielles UEFA · dernière mise à jour UEFA ${esc(upd)}`}, vérifiées automatiquement chaque jour.</p>`;
   };
   draw();
   main.onclick = e => {
     const p = e.target.closest("[data-uefa-period]");
     if (p) { uefa.period = p.dataset.uefaPeriod; draw(); return; }
     const t = e.target.closest("[data-uefa-tab]");
-    if (t) { uefa.tab = t.dataset.uefaTab; draw(); }
+    if (t) { uefa.tab = t.dataset.uefaTab; draw(); return; }
+    const z = e.target.closest("[data-uefa-zone]");
+    if (z) { uefa.zone = z.dataset.uefaZone; draw(); }
   };
   main.onchange = e => { if (e.target.id === "uefa-country") { uefa.country = e.target.value; draw(); } };
   main.oninput = e => {

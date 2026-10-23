@@ -1228,3 +1228,9 @@ table.std { width: 100%; border-collapse: collapse; font-variant-numeric: tabula
 .tcoef { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .tcoef b { color: var(--foot); font-weight: 800; }
 .more-row { margin: 14px 0 4px; text-align: center; }
+
+/* classement FIFA des équipes nationales */
+.nat-t .flag { width: 26px !important; height: 18px !important; }
+.nat-t .tr { display: inline-block; margin-left: 3px; font-size: 10px; vertical-align: middle; }
+.nat-t sup { font-size: .6em; }
+.nat-diff .plus { color: #3ddc84; font-weight: 700; } .nat-diff .minus { color: var(--live); font-weight: 700; } .nat-diff .dim { color: var(--dim); }
