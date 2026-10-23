@@ -173,6 +173,7 @@ function footSection(v) {
   if (v === "today") return "Foot · matchs du jour";
   if (v === "goals") return "Foot · plus beaux buts";
   if (v === "belges") return "Foot · nos Belges";
+  if (v === "notifs") return "Foot · notifications";
   const l = BY_SLUG[v];
   return !l ? "Foot" : l.g === "d1" ? "Foot · championnats" : l.g === "cup" ? "Foot · coupes nationales" : l.g === "nat" ? "Foot · sélections" : "Foot · coupes d'Europe";
 }
@@ -231,6 +232,9 @@ function renderSidebar() {
     </button>
     <button class="league-item today-item bel-item ${state.view === "belges" ? "active" : ""}" data-slug="belges">
       <span class="ico">${flagImg("be")}</span><span class="lname">Nos Belges<span class="lcountry">Buteurs et passeurs belges</span></span>
+    </button>
+    <button class="league-item today-item ${state.view === "notifs" ? "active" : ""}" data-slug="notifs">
+      <span class="ico">🔔</span><span class="lname">Mes notifications<span class="lcountry">Buts et résultats de tes équipes</span></span>
     </button>
     <button class="league-item today-item ${state.view === "goals" ? "active" : ""}" data-slug="goals">
       <span class="ico">🎬</span><span class="lname">Plus beaux buts<span class="lcountry">Vidéos des derniers matchs</span></span>
@@ -348,7 +352,7 @@ const loadingHTML = (txt = "Chargement des résultats…") => `<div class="loadi
 function renderFoot() {
   clearInterval(refreshTimer);
   const fm = $("#foot-main"); fm.onclick = null; fm.oninput = null;   // gestionnaires propres à « Nos Belges »
-  if (state.view === "today") renderToday(); else if (state.view === "goals") renderGoals(); else if (state.view === "belges") renderBelges(); else renderLeague();
+  if (state.view === "today") renderToday(); else if (state.view === "goals") renderGoals(); else if (state.view === "belges") renderBelges(); else if (state.view === "notifs") renderNotifs(); else renderLeague();
 }
 
 // ---------- vue "matchs du jour"
@@ -467,6 +471,8 @@ async function renderLeague(silent = false) {
     <div class="page-head">
       ${state.logos[l.s] ? `<img class="logo" src="${state.logos[l.s]}" alt="">` : ""}
       <div><h1>${esc(l.n)}</h1><div class="sub" id="league-sub">${l.f ? flagImg(l.f) : ""} ${esc(l.c)}</div></div>
+      <span class="grow"></span>
+      ${bellBtn(PUSH.followsLeague(l.s), `data-follow-league="${l.s}" data-name="${esc(l.n)}"`)}
     </div>
     <div class="tabs">
       <button class="tab ${state.tab === "results" ? "active" : ""}" data-tab="results">Résultats & calendrier</button>
@@ -1174,6 +1180,7 @@ function drawMatch() {
   const goals = tid => keyEv.filter(k => k.scoringPlay && k.team?.id === tid && !/shootout/i.test(k.type?.type || ""))
     .map(k => `${esc(shortName(k.participants?.[0]?.athlete?.displayName || ""))} ${esc(k.clock?.displayValue || "")}${k.type?.type === "own-goal" ? " (c.s.c.)" : /penalty/i.test(k.type?.text || "") ? " (pén.)" : ""}`);
   const logo = t => t.team.logos?.[0]?.href || t.team.logo;
+  const followTeamBtn = t => bellBtn(PUSH.followsTeam(t.team.id), `data-follow-team="${esc(t.team.id)}" data-name="${esc(t.team.shortDisplayName || t.team.displayName)}" data-logo="${esc(logo(t) || "")}" data-leagues="${esc(mc.league)}"`);
   const scoreBox = played => played
     ? `<div class="mc-score ${live ? "live" : ""}"><span>${esc(H.score)}</span><i>:</i><span>${esc(A.score)}</span></div>`
     : `<div class="mc-score pre"><span class="kick">${fmtTime(new Date(comp.date))}</span></div>`;
@@ -1186,13 +1193,13 @@ function drawMatch() {
   const head = `
     <div class="mc-league">${l ? `${l.f ? flagImg(l.f) : ""} ${esc(l.c)} · ${esc(l.n)}` : ""} · ${fmtDay(new Date(comp.date))}</div>
     <div class="mc-head">
-      <div class="mc-team">${logo(H) ? `<img src="${logo(H)}" alt="">` : ""}<b>${esc(H.team.displayName)}</b><div class="mc-goals">${goals(H.team.id).join("<br>")}</div></div>
+      <div class="mc-team">${logo(H) ? `<img src="${logo(H)}" alt="">` : ""}<b>${esc(H.team.displayName)}</b>${followTeamBtn(H)}<div class="mc-goals">${goals(H.team.id).join("<br>")}</div></div>
       <div class="mc-mid">
         ${scoreBox(played)}
         <div class="mc-status ${live ? "live" : ""}">${live ? `<i></i>${esc(ev.label)}` : played ? esc(ev.label) : "Coup d'envoi"}</div>
         ${pens}
       </div>
-      <div class="mc-team">${logo(A) ? `<img src="${logo(A)}" alt="">` : ""}<b>${esc(A.team.displayName)}</b><div class="mc-goals">${goals(A.team.id).join("<br>")}</div></div>
+      <div class="mc-team">${logo(A) ? `<img src="${logo(A)}" alt="">` : ""}<b>${esc(A.team.displayName)}</b>${followTeamBtn(A)}<div class="mc-goals">${goals(A.team.id).join("<br>")}</div></div>
     </div>
     <div class="mc-info">${[venue && "🏟 " + esc(venue), att ? `${Number(att).toLocaleString("fr-BE")} spectateurs` : "", ref && "Arbitre : " + esc(ref)].filter(Boolean).join(" · ")}
       ${played ? `<a class="yt" href="https://www.youtube.com/results?search_query=${encodeURIComponent(`${H.team.displayName} ${A.team.displayName} résumé ${new Date(comp.date).getFullYear()}`)}" target="_blank" rel="noopener">▶ Résumé sur YouTube</a>` : ""}</div>
@@ -1796,6 +1803,161 @@ async function renderBelges() {
   };
 }
 
+// ---------- notifications : suivre des équipes / championnats (coup d'envoi, buts, résultat)
+const PUSH = (() => {
+  const C = window.ARENA_CONFIG || {};
+  const DEF = { leagues: [], teams: [], types: { kickoff: true, goals: true, final: true } };
+  const b64 = s => { const p = "=".repeat((4 - s.length % 4) % 4); const r = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from([...r].map(c => c.charCodeAt(0))); };
+  const rpc = (fn, body) => fetch(`${C.supabaseUrl}/rest/v1/rpc/${fn}`, { method: "POST", headers: { apikey: C.supabaseAnonKey, Authorization: `Bearer ${C.supabaseAnonKey}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const api = {
+    follows() { const f = store.get("arena-follows", null) || {}; return { ...DEF, ...f, types: { ...DEF.types, ...(f.types || {}) } }; },
+    on() { return store.get("arena-push-on", false) && "Notification" in window && Notification.permission === "granted"; },
+    supported() { return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window && !!C.vapidPublicKey; },
+    status() {
+      if (IS_IOS && !IS_STANDALONE) return "ios-install";
+      if (!api.supported()) return "unsupported";
+      if (Notification.permission === "denied") return "denied";
+      return api.on() ? "on" : "off";
+    },
+    async subscription(create = false) {
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub && create) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(C.vapidPublicKey) });
+      return sub;
+    },
+    async sync() {
+      if (!api.on()) return;
+      try {
+        const sub = await api.subscription(true);
+        const j = sub.toJSON();
+        await rpc("arena_push_subscribe", { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_follows: api.follows() });
+      } catch {}
+    },
+    async enable() {
+      const st = api.status();
+      if (st === "ios-install") { toast("Sur iPhone, installe d'abord Arena sur l'écran d'accueil (bouton ⬇ en haut), puis active les notifications depuis l'appli."); openInstall(); return false; }
+      if (st === "unsupported") { toast("Ce navigateur ne gère pas les notifications. Essaie avec Chrome ou Safari."); return false; }
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { toast("Notifications refusées. Tu peux les autoriser dans les réglages du navigateur pour arena.eraz.ovh."); return false; }
+      store.set("arena-push-on", true);
+      try { await api.subscription(true); } catch { toast("Impossible d'activer les notifications sur cet appareil."); store.set("arena-push-on", false); return false; }
+      await api.sync();
+      return true;
+    },
+    async disable() {
+      try { const sub = await api.subscription(false); if (sub) { await rpc("arena_push_unsubscribe", { p_endpoint: sub.endpoint }); await sub.unsubscribe(); } } catch {}
+      store.set("arena-push-on", false);
+    },
+    save(f) { store.set("arena-follows", f); api.sync(); },
+    followsTeam: id => api.follows().teams.some(t => t.id === id),
+    followsLeague: slug => api.follows().leagues.includes(slug),
+    async toggleTeam(team) {
+      const f = api.follows();
+      if (f.teams.some(t => t.id === team.id)) { f.teams = f.teams.filter(t => t.id !== team.id); api.save(f); return false; }
+      // compétitions de l'équipe cette saison (championnat + coupes), pour que le robot sache où regarder
+      try {
+        const s = await getJSON(`${API}/all/teams/${team.id}/schedule`, 6 * 3600e3);
+        team.leagues = [...new Set([...(team.leagues || []), ...(s.events || []).map(e => e.league?.slug).filter(x => x && !/friendly/.test(x))])];
+      } catch {}
+      f.teams.push(team); api.save(f);
+      if (!api.on()) await api.enable();
+      return true;
+    },
+    async toggleLeague(slug) {
+      const f = api.follows();
+      if (f.leagues.includes(slug)) { f.leagues = f.leagues.filter(x => x !== slug); api.save(f); return false; }
+      f.leagues.push(slug); api.save(f);
+      if (!api.on()) await api.enable();
+      return true;
+    },
+  };
+  return api;
+})();
+window.PUSH = PUSH;
+
+function toast(msg) {
+  let t = $("#toast");
+  if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 5200);
+}
+const bellBtn = (on, attrs, label = "") => `<button class="follow-btn ${on ? "on" : ""}" ${attrs}>${on ? "🔔 Suivi" : "🔔 Suivre"}${label}</button>`;
+
+// boutons « Suivre » (championnat dans l'en-tête, équipes dans la fiche match)
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-follow-league], [data-follow-team]");
+  if (!b) return;
+  e.stopPropagation();
+  b.disabled = true;
+  let on;
+  if (b.dataset.followLeague) on = await PUSH.toggleLeague(b.dataset.followLeague);
+  else on = await PUSH.toggleTeam({ id: b.dataset.followTeam, name: b.dataset.name, logo: b.dataset.logo, leagues: b.dataset.leagues ? b.dataset.leagues.split(",") : [] });
+  document.querySelectorAll(b.dataset.followLeague ? `[data-follow-league="${b.dataset.followLeague}"]` : `[data-follow-team="${b.dataset.followTeam}"]`)
+    .forEach(x => { x.classList.toggle("on", on); x.textContent = on ? "🔔 Suivi" : "🔔 Suivre"; });
+  b.disabled = false;
+  if (on) toast(PUSH.on() ? `Tu recevras les buts et résultats de ${b.dataset.name || "ce championnat"}.` : "Suivi enregistré. Active les notifications pour être prévenu.");
+  if (state.view === "notifs") renderNotifs();
+}, true);
+
+// page « Mes notifications »
+function renderNotifs() {
+  const main = $("#foot-main");
+  const f = PUSH.follows(), st = PUSH.status();
+  const statusCard = {
+    "on": `<div class="nt-status on"><b>🔔 Notifications activées</b><span>Tu reçois les alertes des équipes et championnats que tu suis.</span><div class="nt-actions"><button class="ghost" data-nt="test">Envoyer une notification de test</button><button class="ghost" data-nt="off">Désactiver</button></div></div>`,
+    "off": `<div class="nt-status"><b>Notifications désactivées</b><span>Active-les pour être prévenu des coups d'envoi, des buts et des résultats.</span><div class="nt-actions"><button class="cta" data-nt="on">Activer les notifications</button></div></div>`,
+    "denied": `<div class="nt-status warn"><b>Notifications bloquées</b><span>Tu les as refusées pour ce site. Autorise-les dans les réglages de ton navigateur (Paramètres du site → Notifications → arena.eraz.ovh), puis reviens ici.</span></div>`,
+    "ios-install": `<div class="nt-status warn"><b>Sur iPhone : installe d'abord l'appli</b><span>Apple n'autorise les notifications que pour les sites ajoutés à l'écran d'accueil. Installe Arena 360, ouvre-le depuis l'icône, puis reviens sur cette page.</span><div class="nt-actions"><button class="cta" data-nt="install">Installer Arena 360</button></div></div>`,
+    "unsupported": `<div class="nt-status warn"><b>Non disponible ici</b><span>Ce navigateur ne gère pas les notifications. Essaie avec Chrome (Android, ordinateur) ou avec l'appli installée sur iPhone.</span></div>`,
+  }[st];
+  const types = [["kickoff", "Coup d'envoi"], ["goals", "Buts (avec le buteur)"], ["final", "Résultat final"]];
+  const lname = slug => { const l = BY_SLUG[slug]; return l ? `${l.c} · ${l.n}` : slug; };
+  main.innerHTML = `
+    <div class="page-head"><div><h1>Mes notifications</h1><div class="sub">Buts, coups d'envoi et résultats des équipes et championnats que tu suis</div></div></div>
+    ${statusCard}
+    <section class="nt-card">
+      <div class="pm-title">Me prévenir pour…</div>
+      ${types.map(([k, n]) => `<label class="nt-toggle"><input type="checkbox" id="nt-${k}" data-nt-type="${k}" ${f.types[k] ? "checked" : ""}><span>${n}</span></label>`).join("")}
+    </section>
+    <section class="nt-card">
+      <div class="pm-title">Équipes suivies · ${f.teams.length}</div>
+      ${f.teams.length ? f.teams.map(t => `<div class="nt-item">${t.logo ? `<img src="${esc(t.logo)}" alt="">` : ""}<b>${esc(t.name || t.id)}</b>${bellBtn(true, `data-follow-team="${esc(t.id)}" data-name="${esc(t.name || "")}"`)}</div>`).join("")
+        : `<p class="muted">Ouvre la fiche d'un match et appuie sur <b>🔔 Suivre</b> sous une équipe.</p>`}
+    </section>
+    <section class="nt-card">
+      <div class="pm-title">Championnats et coupes suivis · ${f.leagues.length}</div>
+      ${f.leagues.length ? f.leagues.map(s => `<div class="nt-item"><b>${esc(lname(s))}</b>${bellBtn(true, `data-follow-league="${esc(s)}" data-name="${esc(lname(s))}"`)}</div>`).join("")
+        : `<p class="muted">Ouvre un championnat (Jupiler Pro League, Ligue des Champions…) et appuie sur <b>🔔 Suivre</b> en haut.</p>`}
+    </section>
+    <p class="source">Les alertes arrivent en général moins de 2 minutes après le but. Arena ne garde aucune donnée personnelle : seulement l'adresse technique de ton appareil et ce que tu suis.</p>`;
+  main.onclick = async e => {
+    const a = e.target.closest("[data-nt]");
+    if (!a) return;
+    if (a.dataset.nt === "on") { await PUSH.enable(); renderNotifs(); }
+    if (a.dataset.nt === "off") { await PUSH.disable(); renderNotifs(); }
+    if (a.dataset.nt === "install") openInstall();
+    if (a.dataset.nt === "test") {
+      const reg = await navigator.serviceWorker.ready;
+      reg.showNotification("⚽ BUT ! Club Brugge 1-0 Anderlecht", { body: "Exemple de notification Arena 360 · 23'", icon: "icons/icon-192.png", badge: "icons/favicon-48.png", tag: "test" });
+    }
+  };
+  main.oninput = e => {
+    const k = e.target.dataset?.ntType;
+    if (!k) return;
+    const f2 = PUSH.follows(); f2.types[k] = e.target.checked; PUSH.save(f2);
+  };
+}
+
+// lien d'une notification : arena.eraz.ovh/#m-<compétition>-<match> → ouvre la fiche du match
+function openFromHash() {
+  const m = location.hash.match(/^#m-([a-z0-9._]+)-(\d+)$/i);
+  if (!m) return;
+  history.replaceState(null, "", location.pathname + location.search);
+  setTimeout(() => openMatch(m[1], m[2]), 300);
+}
+window.addEventListener("hashchange", openFromHash);
+navigator.serviceWorker?.addEventListener("message", e => { if (e.data?.type === "open" && e.data.url) { location.hash = new URL(e.data.url).hash; } });
+
 // ---------- bouton « Admin » : visible seulement si ce téléphone est connecté avec un compte admin
 // (vérifié à l'ouverture, après une connexion dans « Je parie », et à chaque retour sur l'appli)
 async function checkAdmin() {
@@ -1822,8 +1984,10 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 // ================================================================= init
 renderSidebar();
 const savedView = store.get("view", "today");
-if (savedView !== "today" && (BY_SLUG[savedView] || savedView === "belges")) state.view = savedView;
+if (savedView !== "today" && (BY_SLUG[savedView] || savedView === "belges" || savedView === "notifs")) state.view = savedView;
 renderSidebar();
 renderFoot();
 if (["velo", "jeu"].includes(store.get("sport", "foot"))) setSport(store.get("sport"));
 else arenaTrack(footSection(state.view));
+openFromHash();
+PUSH.sync();

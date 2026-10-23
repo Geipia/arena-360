@@ -5,6 +5,7 @@
 window.ARENA_CONFIG = {
   supabaseUrl: "https://ljlshnxllwrgkrhqtyth.supabase.co",
   supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqbHNobnhsbHdyZ2tyaHF0eXRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0MDU0ODYsImV4cCI6MjEwNzk4MTQ4Nn0.90tbSczln_Y7i-5I99fpLPIWa8Uln-O_lasdGAFImJs",   // clé publique « anon » : sans danger, les règles de sécurité protègent les équipes
+  vapidPublicKey: "BNYnDx9w3WITkTavkQULOwFKfVRZ63atDHrvy7PJ3ifdNeauvgHdERvVm4kuF7Vr_5W6nEFx3GnQqw5-tyKpcqE",   // clé publique des notifications (la privée n'est jamais dans le code)
 
   season: 2027,             // saison jouée
   budget: 500,              // budget de départ (points fictifs)

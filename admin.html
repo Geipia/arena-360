@@ -158,6 +158,7 @@
           : `<div class="msg">${esc(error.message)}</div>`;
       return;
     }
+    try { const pc = await sb.rpc("arena_push_count"); if (!pc.error) data.push_subs = pc.data; } catch {}
     render(data);
     timer = setTimeout(load, 60000);   // mise à jour toute seule chaque minute
   }
@@ -218,6 +219,7 @@
         ${kpi(`Vues · ${days_} jours`, fmt(s.total_views), `${fmt(Math.round(s.total_views / days_))} par jour en moyenne`)}
         ${kpi(`Visites · ${days_} jours`, fmt(s.total_visits), `${ppv} pages par visite`)}
         ${kpi("Depuis le début", fmt(s.all_time_views), "vues au total")}
+        ${s.push_subs != null ? kpi("Notifications", fmt(s.push_subs), "appareils abonnés") : ""}
         ${kpi("Joueurs inscrits", fmt(Math.max(s.players.velo, s.players.foot)), `${fmt(s.players.velo)} vélo · ${fmt(s.players.foot)} foot`)}
       </div>
       <div class="grid">
