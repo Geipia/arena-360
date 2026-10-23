@@ -237,7 +237,7 @@ const Online = {
         document.head.appendChild(s);
       });
     }
-    this.sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
+    this.sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true } });   // reste connecté, renouvelle tout seul
   },
   _row(r) { return { id: r.user_id, pseudo: r.pseudo, riders: r.riders || [], history: r.history || [], transfers: r.transfers || {}, updatedAt: r.updated_at }; },
   async list() {
