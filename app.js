@@ -173,6 +173,7 @@ function footSection(v) {
   if (v === "today") return "Foot · matchs du jour";
   if (v === "goals") return "Foot · plus beaux buts";
   if (v === "belges") return "Foot · nos Belges";
+  if (v === "uefa") return "Foot · coefficients UEFA";
   if (v === "notifs") return "Foot · notifications";
   const l = BY_SLUG[v];
   return !l ? "Foot" : l.g === "d1" ? "Foot · championnats" : l.g === "cup" ? "Foot · coupes nationales" : l.g === "nat" ? "Foot · sélections" : "Foot · coupes d'Europe";
@@ -232,6 +233,9 @@ function renderSidebar() {
     </button>
     <button class="league-item today-item bel-item ${state.view === "belges" ? "active" : ""}" data-slug="belges">
       <span class="ico">${flagImg("be")}</span><span class="lname">Nos Belges<span class="lcountry">Buteurs et passeurs belges</span></span>
+    </button>
+    <button class="league-item today-item ${state.view === "uefa" ? "active" : ""}" data-slug="uefa">
+      <span class="ico">🏆</span><span class="lname">Coefficients UEFA<span class="lcountry">Classement des pays et des clubs</span></span>
     </button>
     <button class="league-item today-item ${state.view === "notifs" ? "active" : ""}" data-slug="notifs">
       <span class="ico">🔔</span><span class="lname">Mes notifications<span class="lcountry">Buts et résultats de tes équipes</span></span>
@@ -352,7 +356,7 @@ const loadingHTML = (txt = "Chargement des résultats…") => `<div class="loadi
 function renderFoot() {
   clearInterval(refreshTimer);
   const fm = $("#foot-main"); fm.onclick = null; fm.oninput = null;   // gestionnaires propres à « Nos Belges »
-  if (state.view === "today") renderToday(); else if (state.view === "goals") renderGoals(); else if (state.view === "belges") renderBelges(); else if (state.view === "notifs") renderNotifs(); else renderLeague();
+  if (state.view === "today") renderToday(); else if (state.view === "goals") renderGoals(); else if (state.view === "belges") renderBelges(); else if (state.view === "uefa") renderUefa(); else if (state.view === "notifs") renderNotifs(); else renderLeague();
 }
 
 // ---------- vue "matchs du jour"
@@ -1803,6 +1807,142 @@ async function renderBelges() {
   };
 }
 
+// ---------- Coefficients UEFA : classement des pays et des clubs (uefa.json, mis à jour chaque jour)
+const uefa = { tab: "assoc", period: "5y", country: "all", q: "" };
+const UEFA_ISO = { ...IOC, ENG: "gb-eng", SCO: "gb-sct", WAL: "gb-wls", NIR: "gb-nir", LVA: "lv", LIE: "li", FRO: "fo", MLT: "mt", GIB: "gi", SMR: "sm" };
+const UEFA_FR = { ENG: "Angleterre", SCO: "Écosse", WAL: "Pays de Galles", NIR: "Irlande du Nord", KOS: "Kosovo" };
+const REGION_FR = new Intl.DisplayNames(["fr"], { type: "region" });
+const uefaName = code => { if (UEFA_FR[code]) return UEFA_FR[code]; try { return REGION_FR.of(UEFA_ISO[code].toUpperCase()) || code; } catch { return code; } };
+const uefaSeason = y => `${String(y - 1).slice(2)}-${String(y).slice(2)}`;
+const fmtCoef = (v, d = 3) => v == null ? "–" : v.toLocaleString("fr-BE", { minimumFractionDigits: d, maximumFractionDigits: d });
+let UEFA_DATA = null;
+const loadUefa = async () => UEFA_DATA = UEFA_DATA || await getJSON("uefa.json?v=" + new Date().toISOString().slice(0, 13), 60 * 60e3);
+window.loadUefa = loadUefa;
+// classement « cette saison » : on retrie sur les points de la saison en cours (ex aequo = même place)
+function rankBy(list, key) {
+  const s = list.map(x => ({ ...x })).sort((a, b) => key(b) - key(a));
+  s.forEach((x, i) => x._p = i > 0 && key(s[i - 1]) === key(x) ? s[i - 1]._p : i + 1);
+  return s;
+}
+
+async function renderUefa() {
+  const main = $("#foot-main");
+  main.innerHTML = `<div class="loading"><div class="spinner"></div>Chargement des coefficients UEFA…</div>`;
+  let d;
+  try { d = await loadUefa(); } catch { main.innerHTML = `<div class="empty">Impossible de charger les coefficients UEFA pour le moment.</div>`; return; }
+  if (state.view !== "uefa") return;
+  const cur = d.season;
+  const years = Array.from({ length: 5 }, (_, i) => cur - 4 + i);
+  const bel = d.assoc.find(a => a.code === "BEL");
+  const belNow = rankBy(d.assoc, a => a.seasons[cur] || 0).find(a => a.code === "BEL")._p;
+  const brugge = d.clubs.find(c => c.name === "Club Brugge");
+  const flag = c => flagImg(UEFA_ISO[c]);
+  const trend = t => t === "UP" ? `<i class="tr up" title="en hausse">▲</i>` : t === "DOWN" ? `<i class="tr down" title="en baisse">▼</i>` : "";
+
+  const draw = () => {
+    const isNow = uefa.period === "now";
+    const val = x => isNow ? x.seasons[cur] || 0 : x.total;
+    const yearCols = x => isNow ? "" : years.map(y => `<td class="yr ${y === cur ? "cur" : ""}">${fmtCoef(x.seasons[y], uefa.tab === "assoc" ? 3 : x.seasons[y] % 1 ? 2 : 0)}</td>`).join("");
+    const head = first => `<thead><tr><th>#</th><th class="l">${first}</th>${isNow ? "" : years.map(y => `<th class="yr ${y === cur ? "cur" : ""}">${uefaSeason(y)}</th>`).join("")}<th>${isNow ? `Points ${uefaSeason(cur)}` : "Total"}</th>${uefa.tab === "assoc" ? `<th class="clubs">Clubs</th>` : ""}</tr></thead>`;
+    const bar = (v, max) => `<div class="ubar"><i style="width:${Math.max(2, v / max * 100)}%"></i></div>`;
+    let body = "";
+    if (uefa.tab === "assoc") {
+      const list = isNow ? rankBy(d.assoc, val) : d.assoc.map(a => ({ ...a, _p: a.pos }));
+      const max = val(list[0]) || 1;
+      body = `<div class="table-wrap"><table class="uefa-table">${head("Pays")}
+        <tbody>${list.map(a => `
+          <tr class="${a.code === "BEL" ? "me" : ""} ${a._p <= 5 ? "zone-top" : ""}">
+            <td class="pos">${a._p}${isNow ? "" : trend(a.trend)}</td>
+            <td class="l"><div class="uc">${flag(a.code)}<b>${esc(uefaName(a.code))}</b></div>${bar(val(a), max)}</td>
+            ${yearCols(a)}
+            <td class="tot">${fmtCoef(val(a))}</td>
+            <td class="clubs" title="clubs encore en course / clubs engagés cette saison">${a.inPlay}/${a.teams}</td>
+          </tr>`).join("")}</tbody></table></div>
+        <p class="hint">${isNow ? "Les 2 meilleurs pays de la saison gagnent une place de plus en Ligue des Champions la saison suivante." : "Les 5 premiers pays (en surbrillance) envoient 4 clubs directement en Ligue des Champions."} « Clubs » : clubs encore en course cette saison / clubs engagés.</p>`;
+    } else {
+      const q = uefa.q.trim().toLowerCase();
+      const countries = [...new Set(d.clubs.map(c => c.country))].sort((a, b) => uefaName(a).localeCompare(uefaName(b), "fr"));
+      let list = isNow ? rankBy(d.clubs.filter(c => c.seasons[cur] != null), val) : d.clubs.map(c => ({ ...c, _p: c.pos }));
+      list = list.filter(c => (uefa.country === "all" || c.country === uefa.country) && (!q || c.name.toLowerCase().includes(q)));
+      const max = Math.max(...list.map(val), 1);
+      const pts = v => fmtCoef(v, v % 1 ? 2 : 0);
+      body = `
+      <div class="toolbar">
+        <input class="search" id="uefa-q" type="search" placeholder="Club…" value="${esc(uefa.q)}">
+        <select id="uefa-country" class="select" aria-label="Pays">
+          <option value="all">Tous les pays</option>
+          ${countries.map(c => `<option value="${c}" ${uefa.country === c ? "selected" : ""}>${esc(uefaName(c))}</option>`).join("")}
+        </select>
+      </div>
+      ${list.length ? `<div class="table-wrap"><table class="uefa-table clubs-t">${head("Club")}
+        <tbody>${list.slice(0, 200).map(c => `
+          <tr class="${c.country === "BEL" ? "me" : ""}">
+            <td class="pos">${c._p}${isNow ? "" : trend(c.trend)}</td>
+            <td class="l"><div class="uc"><img class="ulogo" src="https://img.uefa.com/imgml/TP/teams/logos/70x70/${esc(c.id)}.png" alt="" loading="lazy"><b>${esc(c.name)}</b>${flag(c.country)}${isNow && c.comp ? `<em>${esc(c.comp.replace(/^UEFA /, ""))}</em>` : ""}</div>${bar(val(c), max)}</td>
+            ${yearCols(c)}
+            <td class="tot">${pts(val(c))}</td>
+          </tr>`).join("")}</tbody></table></div>`
+        : `<div class="empty">Aucun club ne correspond.</div>`}`;
+    }
+    const how = `
+      <section class="nt-card uefa-how">
+        <div class="pm-title">Les points d'un club, à chaque match européen</div>
+        <ul>
+          <li><b>Victoire : 2 points</b>, <b>match nul : 1 point</b> (Ligue des Champions, Europa League, Conference League).</li>
+          <li>En qualifications, les points comptent à moitié, et seulement pour le pays.</li>
+          <li><b>Bonus</b> : la participation à la phase de ligue, une bonne place dans cette phase et chaque tour franchi (8es, quarts, demies, finale) rapportent des points en plus. La Ligue des Champions rapporte le plus.</li>
+        </ul>
+        <div class="pm-title">Le coefficient d'un club</div>
+        <p>La somme de ses points des 5 dernières saisons.${brugge ? ` Exemple : Club Brugge a ${fmtCoef(brugge.total, 2)} points, dont ${fmtCoef(brugge.seasons[cur] || 0, 2)} cette saison.` : ""}</p>
+        <div class="pm-title">Le coefficient d'un pays</div>
+        <p>Chaque saison, on additionne les points des clubs du pays (sans les bonus de participation) et on <b>divise par le nombre de clubs engagés</b>. Puis on additionne les 5 dernières saisons. Quand Bruges, l'Union ou Anderlecht gagnent, toute la Belgique monte.</p>
+        <div class="pm-title">À quoi ça sert ?</div>
+        <p>Le classement des pays fixe le nombre de places en coupe d'Europe de chaque championnat : les 5 premiers ont 4 places directes en Ligue des Champions. Les 2 meilleurs pays de la saison gagnent une place en plus la saison suivante. Le coefficient des clubs sert à placer les équipes dans les chapeaux des tirages au sort.</p>
+      </section>`;
+    const upd = new Date(d.updated).toLocaleString("fr-BE", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+    main.innerHTML = `
+      <section class="bel-hero uefa-hero">
+        <div class="uefa-star" aria-hidden="true">★</div>
+        <div class="bel-hero-text">
+          <div class="eyebrow">Saison ${uefaSeason(cur)} · classement officiel UEFA</div>
+          <h1>Coefficients UEFA</h1>
+          <p>Chaque victoire d'un club en coupe d'Europe rapporte des points à son club et à son pays. Le classement des pays décide combien de clubs chaque pays envoie en coupe d'Europe.</p>
+        </div>
+        <div class="bel-kpis">
+          <div><b>${bel.pos}<sup>e</sup></b><span>${flagImg("be")} 5 saisons</span></div>
+          <div><b>${belNow}<sup>e</sup></b><span>cette saison</span></div>
+          <div><b>${fmtCoef(bel.seasons[cur] || 0, 1)}</b><span>pts ${uefaSeason(cur)}</span></div>
+        </div>
+      </section>
+      ${uefa.tab === "how" ? "" : `<div class="gmode bel-period" role="tablist">
+        <button class="${!isNow ? "on" : ""}" data-uefa-period="5y">Sur 5 saisons</button>
+        <button class="${isNow ? "on" : ""}" data-uefa-period="now">Cette saison</button>
+      </div>`}
+      <div class="tabs bel-tabs">
+        <button class="tab ${uefa.tab === "assoc" ? "active" : ""}" data-uefa-tab="assoc">🌍 Pays</button>
+        <button class="tab ${uefa.tab === "clubs" ? "active" : ""}" data-uefa-tab="clubs">🛡️ Clubs</button>
+        <button class="tab ${uefa.tab === "how" ? "active" : ""}" data-uefa-tab="how">❓ Comment ça marche</button>
+      </div>
+      ${uefa.tab === "how" ? how : body}
+      <p class="source">Données officielles UEFA, mises à jour automatiquement chaque jour · dernière mise à jour UEFA ${esc(upd)}.</p>`;
+  };
+  draw();
+  main.onclick = e => {
+    const p = e.target.closest("[data-uefa-period]");
+    if (p) { uefa.period = p.dataset.uefaPeriod; draw(); return; }
+    const t = e.target.closest("[data-uefa-tab]");
+    if (t) { uefa.tab = t.dataset.uefaTab; draw(); }
+  };
+  main.onchange = e => { if (e.target.id === "uefa-country") { uefa.country = e.target.value; draw(); } };
+  main.oninput = e => {
+    if (e.target.id !== "uefa-q") return;
+    uefa.q = e.target.value;
+    const pos = e.target.selectionStart;
+    draw();
+    const q = $("#uefa-q"); q.focus(); q.setSelectionRange(pos, pos);
+  };
+}
+
 // ---------- notifications : suivre des équipes / championnats (coup d'envoi, buts, résultat)
 const PUSH = (() => {
   const C = window.ARENA_CONFIG || {};
@@ -1984,7 +2124,7 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 // ================================================================= init
 renderSidebar();
 const savedView = store.get("view", "today");
-if (savedView !== "today" && (BY_SLUG[savedView] || savedView === "belges" || savedView === "notifs")) state.view = savedView;
+if (savedView !== "today" && (BY_SLUG[savedView] || savedView === "belges" || savedView === "uefa" || savedView === "notifs")) state.view = savedView;
 renderSidebar();
 renderFoot();
 if (["velo", "jeu"].includes(store.get("sport", "foot"))) setSport(store.get("sport"));

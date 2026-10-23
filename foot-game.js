@@ -1,5 +1,5 @@
 /* ARENA 360 — « Je parie » Football : 3 équipes, un budget, des points à chaque victoire et chaque semaine en tête.
-   Prix = force actuelle (points par match × niveau du championnat). Points calculés en direct avec les résultats ESPN. */
+   Prix = force sur plusieurs saisons (championnat cette saison et la passée, coefficient UEFA du club et du pays). Points calculés en direct avec les résultats ESPN. */
 "use strict";
 
 const FOOT = {
@@ -10,8 +10,6 @@ const FOOT = {
   size: 3,
   maxChanges: 5,
 };
-const LEAGUE_COEF = { "eng.1": 1, "esp.1": 1, "ita.1": 1, "ger.1": 1, "fra.1": 1, "por.1": .8, "ned.1": .8,
-  "bel.1": .65, "tur.1": .65, "sco.1": .6, "aut.1": .6, "sui.1": .6, "gre.1": .6, "den.1": .6, "cze.1": .6, "nor.1": .55, "swe.1": .55 };
 const FBAREME = [
   { key: "league", label: "Match de championnat", w: 3, d: 1 },
   { key: "uefa.champions", label: "Ligue des Champions", w: 6, d: 2 },
@@ -34,47 +32,105 @@ function compKind(slug, teamLeague) {
   return FBAREME[6];
 }
 
-// ---------------------------------------------------------------- marché des équipes (classements actuels)
+// ---------------------------------------------------------------- marché des équipes (prix sur plusieurs saisons)
+/* Prix d'une équipe = force sur plusieurs saisons :
+   - championnat : points par match cette saison, mélangés avec la saison passée (qui pèse moins à mesure que la saison avance),
+     multipliés par le niveau du championnat (coefficient UEFA du pays sur 5 ans) ;
+   - Europe : coefficient UEFA du club (ses résultats européens des 5 dernières saisons). */
+const PRICE_MIN = 5, PRICE_MAX = 40;
+const PREV_WEIGHT = 12;        // la saison passée compte comme 12 matchs
 let FMARKET = null;
+const normTeam = n => String(n || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/&/g, " ")
+  .replace(/\bkobenhavn\b/g, "copenhagen").replace(/^h /, "hapoel ").replace(/^m /, "maccabi ")
+  .replace(/\b(fc|fk|nk|sk|hnk|gnk|ks|cf|sc|ac|afc|pfc|bc|club|football|futbol|futebol|calcio|de|the|cd|sd|ud|rc|as|ss|ssc|sv|vfb|vfl|tsg|bv|kv|krc|rsc|kaa|royal|sporting)\b/g, " ")
+  .replace(/[^a-z0-9]+/g, " ").trim();
+function nameSim(names, club) {
+  const bi = s => { const t = s.replace(/ /g, ""), m = new Map(); for (let i = 0; i < t.length - 1; i++) m.set(t.slice(i, i + 2), (m.get(t.slice(i, i + 2)) || 0) + 1); return m; };
+  const dice = (a, b) => { const A = bi(a), B = bi(b); let n = 0, na = 0, nb = 0; A.forEach(v => na += v); B.forEach(v => nb += v); A.forEach((v, k) => n += Math.min(v, B.get(k) || 0)); return na + nb ? 2 * n / (na + nb) : 0; };
+  let best = 0;
+  for (const a of names.map(normTeam)) for (const b of [club.name, club.official].map(normTeam)) {
+    if (!a || !b) continue;
+    let s = a === b ? 1 : dice(a, b);
+    if ((" " + b + " ").includes(" " + a + " ") || (" " + a + " ").includes(" " + b + " ")) s = Math.max(s, .85);
+    best = Math.max(best, s);
+  }
+  return best;
+}
+/* relie chaque équipe du marché à son club UEFA (même pays, noms les plus proches d'abord) */
+function attachUefa(list, U) {
+  if (!U) return;
+  const isoToCode = {};
+  U.assoc.forEach(a => { const iso = UEFA_ISO[a.code]; if (iso) isoToCode[iso] = a.code; });
+  const assoc = new Map(U.assoc.map(a => [a.code, a]));
+  const byCountry = new Map();
+  list.forEach(t => { t.ucode = isoToCode[t.flag] || null; t.assoc = assoc.get(t.ucode) || null; if (t.ucode) (byCountry.get(t.ucode) || byCountry.set(t.ucode, []).get(t.ucode)).push(t); });
+  byCountry.forEach((teams, code) => {
+    const clubs = U.clubs.filter(c => c.country === code);
+    const pairs = [];
+    teams.forEach(t => clubs.forEach(c => { const s = nameSim([t.name, t.short], c); if (s >= .7) pairs.push([s, t, c]); }));
+    pairs.sort((a, b) => b[0] - a[0]);
+    const usedT = new Set(), usedC = new Set();
+    for (const [, t, c] of pairs) { if (usedT.has(t) || usedC.has(c)) continue; usedT.add(t); usedC.add(c); t.club = c; }
+  });
+}
+function priceTeams(list, U) {
+  attachUefa(list, U);
+  const maxAssoc = U ? U.assoc[0].total : 1, maxClub = U ? U.clubs[0].total : 1;
+  for (const t of list) {
+    const now = t.gp ? t.pts / t.gp : null;
+    const prev = t.prevGp ? t.prevPts / t.prevGp : 1.3;                      // sans saison passée connue : niveau moyen
+    const ppg = now == null ? prev : (now * t.gp + prev * PREV_WEIGHT) / (t.gp + PREV_WEIGHT);
+    const level = t.assoc ? Math.pow(t.assoc.total / maxAssoc, .8) : t.wiki ? .3 : .4;
+    const dom = Math.pow(Math.min(ppg, 2.6) / 2.6, 1.2) * level;
+    const eur = t.club ? Math.pow(t.club.total / maxClub, .8) : 0;
+    const s = .5 * dom + .5 * eur;
+    t.ppgMix = Math.round(ppg * 100) / 100;
+    t.coef = t.club ? t.club.total : null;
+    t.price = Math.min(PRICE_MAX, Math.max(PRICE_MIN, Math.round(PRICE_MIN + 36 * Math.pow(s, 1.15))));
+  }
+}
+const standingRows = d => (d?.children?.length ? d.children : d?.standings ? [{ standings: d.standings }] : [])
+  .flatMap(g => (g.standings?.entries || []).map(e => ({ e, st: Object.fromEntries(e.stats.map(s => [s.name, s])) })));
 async function loadFootMarket() {
   if (FMARKET && Date.now() - FMARKET.at < 15 * 60e3) return FMARKET;
   const leagues = LEAGUES.filter(l => l.g === "d1");
-  const res = await pool(leagues, 8, l => getJSON(`${API_STD}/${l.s}/standings`, 15 * 60e3));
+  const prevYear = FOOT.start.getFullYear() - 2;   // saison 2025-26 (ou 2025 pour les championnats sur l'année civile)
+  const [res, prevRes, U] = await Promise.all([
+    pool(leagues, 8, l => getJSON(`${API_STD}/${l.s}/standings`, 15 * 60e3)),
+    pool(leagues, 8, l => getJSON(`${API_STD}/${l.s}/standings?season=${prevYear}`, 24 * 3600e3).catch(() => null)),
+    window.loadUefa ? window.loadUefa().catch(() => null) : null,
+  ]);
   const list = [];
   leagues.forEach((l, i) => {
-    const d = res[i];
-    if (!d) return;
-    const groups = d.children?.length ? d.children : d.standings ? [{ standings: d.standings }] : [];
-    groups.forEach(g => (g.standings?.entries || []).forEach(e => {
-      const st = Object.fromEntries(e.stats.map(s => [s.name, s]));
-      const gp = +(st.gamesPlayed?.value || 0), pts = +(st.points?.value || 0);
-      const ppg = gp ? pts / gp : 1;
-      const coef = LEAGUE_COEF[l.s] || .5;
-      const price = Math.max(5, Math.round(5 + 35 * Math.pow(Math.min(ppg, 3) / 3, 1.5) * coef));
+    // saison passée : on additionne les groupes (ex. play-offs belges) pour avoir toute la saison
+    const prev = new Map();
+    standingRows(prevRes[i]).forEach(({ e, st }) => {
+      const p = prev.get(e.team.id) || { gp: 0, pts: 0 };
+      p.gp += +(st.gamesPlayed?.value || 0); p.pts += +(st.points?.value || 0);
+      prev.set(e.team.id, p);
+    });
+    standingRows(res[i]).forEach(({ e, st }) => {
+      const p = prev.get(e.team.id);
       list.push({ id: e.team.id, name: e.team.displayName, short: e.team.shortDisplayName || e.team.displayName, logo: e.team.logos?.[0]?.href,
-        league: l.s, lname: l.n, country: l.c, flag: l.f, rank: +(st.rank?.value || 0), pts, gp, gd: st.pointDifferential?.displayValue || "0", price });
-    }));
+        league: l.s, lname: l.n, country: l.c, flag: l.f, rank: +(st.rank?.value || 0), pts: +(st.points?.value || 0), gp: +(st.gamesPlayed?.value || 0),
+        gd: st.pointDifferential?.displayValue || "0", prevGp: p?.gp || 0, prevPts: p?.pts || 0 });
+    });
   });
   // championnats lus sur Wikipédia (pays absents d'ESPN)
   const espnByName = await europeanTeamIds();
   const wl = WikiLeagues.WIKI_LEAGUES;
   const wres = await pool(wl, 4, l => WikiLeagues.current(l));
   wl.forEach((l, i) => {
-    const d = wres[i];
-    (d?.teams || []).forEach(t => {
-      const ppg = t.gp ? t.pts / t.gp : 1;
-      const coef = ["w:pol", "w:ukr", "w:cro", "w:srb"].includes(l.s) ? .5 : .42;
-      const price = Math.max(5, Math.round(5 + 35 * Math.pow(Math.min(ppg, 3) / 3, 1.5) * coef));
+    (wres[i]?.teams || []).forEach(t => {
       list.push({ id: `${l.s}:${t.code}`, code: t.code, wiki: true, name: t.name, short: t.name, logo: null, espn: espnByName.get(normTeam(t.name)) || null,
-        league: l.s, lname: l.n, country: l.c, flag: l.f, rank: t.rank, pts: t.pts, gp: t.gp, gd: String(t.gf - t.ga), price });
+        league: l.s, lname: l.n, country: l.c, flag: l.f, rank: t.rank, pts: t.pts, gp: t.gp, gd: String(t.gf - t.ga), prevGp: 0, prevPts: 0 });
     });
   });
-  list.sort((a, b) => b.price - a.price || a.rank - b.rank);
+  priceTeams(list, U);
+  list.sort((a, b) => b.price - a.price || (b.coef || 0) - (a.coef || 0) || a.rank - b.rank);
   FMARKET = { at: Date.now(), list, by: new Map(list.map(t => [t.id, t])), leagues: [...LEAGUES.filter(l => l.g === "d1"), ...wl].sort((a, b) => a.c.localeCompare(b.c, "fr")) };
   return FMARKET;
 }
-const normTeam = n => String(n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-  .replace(/\b(fc|fk|nk|sk|hnk|gnk|ks|cf|sc|ac|afc|pfc|bc|fcsb|club|football|futbol|the)\b/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 /* identifiants ESPN des clubs engagés en coupe d'Europe (pour compter leurs matchs européens) */
 async function europeanTeamIds() {
   const slugs = ["uefa.champions", "uefa.europa", "uefa.europa.conf", "uefa.champions_qual", "uefa.europa_qual", "uefa.europa.conf_qual"];
@@ -236,7 +292,7 @@ function applyFootTeams(entry, ids, mkt, now = new Date()) {
 }
 
 // ---------------------------------------------------------------- interface
-const fg = { tab: "teams", me: null, draft: [], league: "bel.1", q: "", sort: "price", players: [], scores: new Map(), msg: null, busy: false, form: new Map(), next: new Map() };
+const fg = { tab: "teams", me: null, draft: [], league: "all", q: "", sort: "price", limit: 10, players: [], scores: new Map(), msg: null, busy: false, form: new Map(), next: new Map() };
 
 function priceOf(id) {
   const h = (fg.me?.history || []).find(h => h.id === id && !h.to);
@@ -280,6 +336,7 @@ function teamCard(t, { picked, canAdd, pts, compact } = {}) {
       <div class="tlogo">${t.logo ? `<img src="${t.logo}" alt="" loading="lazy">` : `<span class="tmono">${esc(initials(t.name))}</span>${flagImg(t.flag, "flag lg")}`}</div>
       <h4 title="${esc(t.name)}">${esc(t.short)}</h4>
       <div class="rteam">${t.rank ? `${t.rank}${t.rank === 1 ? "er" : "e"} · ${t.pts} pts en ${t.gp} matchs` : esc(t.country)}</div>
+      ${t.coef != null ? `<div class="tcoef" title="Coefficient UEFA du club : ses résultats européens des 5 dernières saisons">Coef. UEFA <b>${String(t.coef).replace(".", ",")}</b></div>` : ""}
       ${formHTML(t.id)}
       ${pts != null ? `<dl class="rstats"><div class="live"><dt>Points gagnés</dt><dd>${pts}</dd></div></dl>` : ""}
       ${fg.next.get(t.id) ? `<div class="tnext">Prochain : ${esc(fg.next.get(t.id))}</div>` : ""}
@@ -333,6 +390,7 @@ function footRulesHTML(mk) {
           <li>Pour les championnats lus sur Wikipédia (Pologne, Croatie, Serbie, Ukraine…), les points de championnat sont calculés à partir du classement, et les matchs de coupe d'Europe viennent d'ESPN. Leurs coupes nationales ne sont pas comptées.</li>
           <li>Toutes les compétitions officielles comptent : championnat, coupes d'Europe, coupes nationales. Les matchs amicaux non.</li>
           <li>Une victoire aux tirs au but compte comme une victoire.</li>
+          <li><b>Prix des équipes</b> (de ${PRICE_MIN} à ${PRICE_MAX}) : moitié <b>championnat</b> (points par match cette saison, mélangés avec la saison passée, multipliés par le niveau du championnat selon le coefficient UEFA du pays), moitié <b>Europe</b> (coefficient UEFA du club, ses résultats des 5 dernières saisons).</li>
         </ul>
         <div class="section-title"><h2>Barème</h2></div>
         <div class="table-wrap"><table class="race-table bareme">
@@ -397,7 +455,7 @@ function footDraw() {
     let list = mk.list.filter(t => (fg.league === "all" || t.league === fg.league) && (!q || (t.name + " " + t.country).toLowerCase().includes(q)));
     if (fg.sort === "rank") list = [...list].sort((a, b) => a.league.localeCompare(b.league) || a.rank - b.rank);
     if (fg.sort === "cheap") list = [...list].sort((a, b) => a.price - b.price);
-    const shown = list.slice(0, 80);
+    const shown = list.slice(0, fg.limit);
     const leagues = mk.leagues;
     body = budgetBar + `
       <div class="toolbar">
@@ -417,7 +475,8 @@ function footDraw() {
         const canAdd = fg.draft.length < FOOT.size ? t.price <= left : null;
         return teamCard(t, { picked, canAdd });
       }).join("")}</div>
-      <p class="hint center">${list.length} équipes${list.length > shown.length ? ` · ${shown.length} affichées` : ""}. Le prix dépend des points par match cette saison et du niveau du championnat ; il est fixé au moment où tu choisis l'équipe.</p>`;
+      ${list.length > shown.length ? `<div class="center more-row"><button class="ghost" data-fmore>Voir ${Math.min(20, list.length - shown.length)} équipes de plus</button></div>` : ""}
+      <p class="hint center">${shown.length} équipes affichées sur ${list.length}${fg.league === "all" && !q && fg.sort === "price" ? ", les plus chères d'abord" : ""}. Le prix dépend de plusieurs saisons : résultats en championnat cette saison et la saison passée, niveau du championnat (coefficient UEFA du pays) et résultats européens du club sur 5 ans (coefficient UEFA du club). Il est fixé au moment où tu choisis l'équipe.</p>`;
     // un seul redessin quand de nouvelles formes arrivent (avant : redessin en boucle qui avalait les clics)
     loadForms(shown.slice(0, 24).map(t => t.id)).then(n => { if (n && fg.tab === "market") footDrawSoft(); });
   } else if (fg.tab === "rank") {
@@ -449,6 +508,7 @@ async function footClick(e) {
   if (add) { if (fg.draft.length < FOOT.size) fg.draft.push(add.dataset.fadd); fg.msg = null; footDraw(); loadForms(fg.draft).then(n => { if (n) footDrawSoft(); }); return true; }
   const rm = t.closest("[data-fremove]");
   if (rm) { fg.draft = fg.draft.filter(id => id !== rm.dataset.fremove); fg.msg = null; footDraw(); return true; }
+  if (t.closest("[data-fmore]")) { fg.limit += 20; footDrawSoft(); return true; }
   if (t.closest("[data-freset]")) { fg.draft = [...(fg.me.teams || [])]; footDraw(); return true; }
   if (t.closest("[data-frefresh]")) { fscoreCache.clear(); leagueSeasonCache.clear(); await refreshFootPlayers(); return true; }
   if (t.closest("[data-fsave]")) {
@@ -465,9 +525,9 @@ async function footClick(e) {
   return false;
 }
 function footInput(e) {
-  if (e.target.id === "f-q") { fg.q = e.target.value; const pos = e.target.selectionStart; footDraw(); const q = $("#f-q"); q.focus(); q.setSelectionRange(pos, pos); return true; }
-  if (e.target.id === "f-league") { fg.league = e.target.value; footDraw(); return true; }
-  if (e.target.id === "f-sort") { fg.sort = e.target.value; footDraw(); return true; }
+  if (e.target.id === "f-q") { fg.q = e.target.value; fg.limit = 10; const pos = e.target.selectionStart; footDraw(); const q = $("#f-q"); q.focus(); q.setSelectionRange(pos, pos); return true; }
+  if (e.target.id === "f-league") { fg.league = e.target.value; fg.limit = fg.league === "all" ? 10 : 40; footDraw(); return true; }
+  if (e.target.id === "f-sort") { fg.sort = e.target.value; fg.limit = 10; footDraw(); return true; }
   return false;
 }
 
@@ -478,7 +538,7 @@ function footLoggedOut() {
   return {
     hero: footHeroHTML(),
     previewTitle: "Les équipes les plus chères",
-    preview: mk ? mk.list.slice(0, 3).map(t => teamCard(t, { compact: true })).join("") : `<div class="loading"><div class="spinner"></div>Chargement des équipes…</div>`,
+    preview: mk ? mk.list.slice(0, 10).map(t => teamCard(t, { compact: true })).join("") : `<div class="loading"><div class="spinner"></div>Chargement des équipes…</div>`,
     rules: mk ? footRulesHTML(mk) : "",
   };
 }

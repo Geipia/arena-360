@@ -1,5 +1,5 @@
 /* ARENA — « Je parie » : jeu de cyclisme avec budget fictif.
-   Prix des coureurs = leurs résultats 2026 ; points = leurs résultats de la saison jouée, lus en direct sur Wikipédia.
+   Prix des coureurs = leurs résultats des 3 dernières saisons (la plus récente compte le plus) ; points = leurs résultats de la saison jouée, lus en direct sur Wikipédia.
    Stockage : Supabase si configuré (config.js), sinon ce navigateur (mode local, plusieurs joueurs sur le même PC). */
 "use strict";
 
@@ -82,7 +82,16 @@ function scoreEvents(D) {
   return ev;
 }
 
-// ---------------------------------------------------------------- marché (prix = saison 2026)
+// ---------------------------------------------------------------- marché (prix = 3 dernières saisons)
+/* Saisons passées (cycling-history.json, mêmes données que cycling-data.js). La plus récente compte le plus. */
+const SEASON_WEIGHTS = [1, .6, .35];
+let HISTORY = null;
+async function loadHistory() {
+  if (HISTORY) return HISTORY;
+  try { HISTORY = await (await fetch("cycling-history.json?v=1")).json(); } catch { HISTORY = {}; }
+  MARKET = null;   // on recalcule les prix avec l'historique
+  return HISTORY;
+}
 const TIERS = [
   { min: 70, id: "legend", name: "Légende" },
   { min: 45, id: "star", name: "Star" },
@@ -97,20 +106,35 @@ function buildMarket() {
   const teams = {};
   for (const k of ["worldtour", "proseries", "europetour"]) D[k].forEach(r => { if (r.winner && r.team) teams[keyOf(r.winner.name)] = r.team; });
   const by = new Map();
+  const rider = e => by.get(e.key) || by.set(e.key, { key: e.key, name: e.name, nat: e.nat, pts: 0, wins: 0, best: [], seasons: {}, score: 0 }).get(e.key);
   for (const e of evs) {
-    const o = by.get(e.key) || { key: e.key, name: e.name, nat: e.nat, pts: 0, wins: 0, best: [] };
+    const o = rider(e);
     o.pts += e.pts;
     if (/^(Victoire|1er|Étape)/.test(e.label)) o.wins++;
     o.best.push(e);
     if (!o.nat && e.nat) o.nat = e.nat;
-    by.set(e.key, o);
   }
-  const max = Math.max(...[...by.values()].map(r => r.pts));
+  // saisons passées : comptent pour le prix, seulement pour les coureurs encore actifs (des points cette saison ou la précédente)
+  const years = SEASON_WEIGHTS.map((w, i) => ({ y: D.season - i, w }));
+  const perYear = years.slice(1).map(({ y, w }) => {
+    const H = HISTORY?.[y];
+    const m = new Map();
+    if (H) scoreEvents(cloneData(H)).forEach(e => { const o = m.get(e.key) || m.set(e.key, { e, pts: 0 }).get(e.key); o.pts += e.pts; });
+    return { y, w, m };
+  });
+  const prev = perYear[0];
+  prev?.m.forEach(({ e }) => { const o = rider(e); if (!o.nat && e.nat) o.nat = e.nat; });
+  by.forEach(o => {
+    o.seasons[D.season] = o.pts;
+    o.score = o.pts;
+    perYear.forEach(({ y, w, m }) => { const p = m.get(o.key)?.pts || 0; o.seasons[y] = p; o.score += w * p; });
+  });
+  const max = Math.max(...[...by.values()].map(r => r.score));
   const list = [...by.values()].map(r => {
-    const price = Math.round(5 + 95 * Math.sqrt(r.pts / max));   // de 11 (une petite victoire) à 100 (le n°1)
+    const price = Math.round(5 + 95 * Math.sqrt(r.score / max));   // de ~10 (une petite victoire) à 100 (le n°1)
     r.best.sort((a, b) => b.pts - a.pts);
     return { ...r, team: teams[r.key] || null, price, tier: TIERS.find(t => price >= t.min), best: r.best.slice(0, 4) };
-  }).sort((a, b) => b.price - a.price || b.pts - a.pts);
+  }).sort((a, b) => b.price - a.price || b.score - a.score);
   MARKET = { list, by: new Map(list.map(r => [r.key, r])), events2026: evs };
   return MARKET;
 }
@@ -330,7 +354,8 @@ function riderCard(r, { inTeam, canAdd, compact, pts } = {}) {
       <div class="rteam">${esc(teamName(r.team) || natFr(r.nat))}</div>
       <dl class="rstats">
         <div><dt>2026</dt><dd>${r.pts}</dd></div>
-        <div><dt>Victoires</dt><dd>${r.wins}</dd></div>
+        <div><dt>2025</dt><dd>${r.seasons?.[2025] ?? "–"}</dd></div>
+        ${compact ? "" : `<div><dt>2024</dt><dd>${r.seasons?.[2024] ?? "–"}</dd></div>`}
         ${pts != null ? `<div class="live"><dt>${YEAR}</dt><dd>${pts}</dd></div>` : ""}
       </dl>
       ${compact ? "" : `<ul class="rbest">${r.best.slice(0, 2).map(e => `<li>${esc(e.label)}</li>`).join("")}</ul>`}
@@ -342,6 +367,7 @@ function riderCard(r, { inTeam, canAdd, compact, pts } = {}) {
 
 async function renderGame() {
   const main = $("#jeu-main");
+  if (!HISTORY) { main.innerHTML = `<div class="loading"><div class="spinner"></div>Chargement du jeu…</div>`; await loadHistory(); }
   const m = buildMarket();
   if (!main.dataset.ready) {
     main.dataset.ready = "1";
@@ -486,7 +512,7 @@ function drawGame() {
         const canAdd = ph.open && game.draft.length < SIZE ? (r.price <= left ? true : false) : null;
         return riderCard(r, { inTeam: inTeam && ph.open, canAdd: inTeam ? null : canAdd });
       }).join("")}</div>
-      <p class="hint center">${list.length} coureurs${list.length > shown.length ? ` · ${shown.length} affichés, affine ta recherche` : ""}. Le prix dépend des résultats de 2026.</p>`;
+      <p class="hint center">${list.length} coureurs${list.length > shown.length ? ` · ${shown.length} affichés, affine ta recherche` : ""}. Le prix dépend des résultats de 2026, 2025 et 2024 (la saison la plus récente compte le plus).</p>`;
   } else if (game.tab === "rank") {
     const rows = game.players.map(p => ({ p, s: started ? teamScore(p).total : 0, sim: simulate2026(p.riders || []) }))
       .sort((a, b) => b.s - a.s || b.sim - a.sim || a.p.pseudo.localeCompare(b.p.pseudo));
@@ -519,7 +545,7 @@ function rulesHTML() {
     <section class="rules">
       <div class="section-title"><h2>Règles</h2></div>
       <ul class="rule-list">
-        <li><b>${BUDGET} points</b> de budget fictif et <b>${SIZE} coureurs</b> maximum. Le prix d'un coureur dépend de ses résultats en 2026.</li>
+        <li><b>${BUDGET} points</b> de budget fictif et <b>${SIZE} coureurs</b> maximum. Le prix d'un coureur dépend de ses points sur 3 saisons : 2026 compte en entier, 2025 à 60 % et 2024 à 35 %.</li>
         <li>Tu peux changer ton équipe librement jusqu'au <b>${LOCK.toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}</b>.</li>
         <li>Ensuite, ${WINDOWS.length} fenêtre${WINDOWS.length > 1 ? "s" : ""} de transferts : ${WINDOWS.map(w => `<b>${esc(w.name)}</b> (${w.start.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })} – ${w.end.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}, ${w.max} transferts)`).join(", ")}.</li>
         <li>Un coureur ne rapporte que les points marqués <b>pendant qu'il est dans ton équipe</b>.</li>

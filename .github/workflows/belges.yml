@@ -1,5 +1,5 @@
-# Met à jour « Nos Belges » (belges.json) deux fois par jour, puis republie le site.
-name: Nos Belges
+# Met à jour « Nos Belges » (belges.json) et les coefficients UEFA (uefa.json), puis republie le site.
+name: Nos Belges et UEFA
 
 on:
   schedule:
@@ -27,17 +27,19 @@ jobs:
           node-version: 20
       - name: Calcul des buts et passes des Belges
         run: node tools/build-belges.mjs belges.json
+      - name: Coefficients UEFA
+        run: node tools/build-uefa.mjs || echo "UEFA indisponible, on garde l'ancien fichier"
       - name: Enregistrer et republier si ça a changé
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if git diff --quiet -- belges.json; then
+          if git diff --quiet -- belges.json uefa.json; then
             echo "Rien de nouveau."
             exit 0
           fi
           git config user.name "arena-robot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add belges.json
-          git commit -m "Nos Belges : mise à jour automatique"
+          git add belges.json uefa.json
+          git commit -m "Nos Belges et UEFA : mise à jour automatique"
           git push
           gh api -X POST "repos/${{ github.repository }}/pages/builds" || true

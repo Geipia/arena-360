@@ -1179,3 +1179,52 @@ table.std { width: 100%; border-collapse: collapse; font-variant-numeric: tabula
 .nt-item:first-of-type { border-top: 0; }
 .nt-item img { width: 26px; height: 26px; object-fit: contain; }
 .nt-item b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== Coefficients UEFA ===== */
+.uefa-hero { background: radial-gradient(500px 220px at 100% 0%, rgba(56,214,255,.16), transparent 70%), var(--panel); }
+.uefa-hero .eyebrow { color: var(--foot); }
+.uefa-star { display: grid; place-items: center; width: 92px; height: 92px; font-size: 54px; color: var(--foot); transform: skewX(var(--skew));
+  border-radius: 14px; background: rgba(56,214,255,.1); border: 1px solid rgba(56,214,255,.35); text-shadow: 0 0 24px rgba(56,214,255,.6); }
+.uefa-hero .bel-kpis div:nth-child(1) b { color: var(--belgium); }
+.uefa-hero .bel-kpis div:nth-child(2) b { color: var(--foot); }
+.uefa-hero .bel-kpis div:nth-child(3) b { color: var(--text); }
+.uefa-hero .bel-kpis sup { font-size: .45em; vertical-align: super; }
+.uefa-hero .bel-kpis span .flag { width: 16px; height: 11px; vertical-align: -1px; margin-right: 3px; }
+.uefa-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.uefa-table th { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--dim); padding: 8px 10px; text-align: right; white-space: nowrap; }
+.uefa-table th.l, .uefa-table td.l { text-align: left; }
+.uefa-table td { padding: 9px 10px; border-top: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.uefa-table td.l { width: 100%; min-width: 180px; white-space: normal; }
+.uefa-table .pos { text-align: center; font: 900 20px var(--display); color: var(--muted); width: 44px; }
+.uefa-table .tr { display: block; font-style: normal; font-size: 9px; line-height: 1; }
+.uefa-table .tr.up { color: #3ddc84; } .uefa-table .tr.down { color: var(--live); }
+.uefa-table .yr { color: var(--muted); font-size: 13px; }
+.uefa-table .yr.cur { color: var(--foot); font-weight: 700; }
+.uefa-table .tot { font: 900 20px var(--display); color: var(--text); }
+.uefa-table .clubs { color: var(--muted); font-size: 13px; text-align: center; }
+.uefa-table .uc { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.uefa-table .uc b { font-weight: 800; overflow: hidden; text-overflow: ellipsis; }
+.uefa-table .uc .flag { width: 22px; height: 15px; object-fit: cover; border-radius: 2px; flex: none; }
+.uefa-table .uc em { font-style: normal; font-size: 11px; color: var(--dim); white-space: nowrap; }
+.uefa-table .ulogo { width: 24px; height: 24px; object-fit: contain; flex: none; }
+.uefa-table .ubar { height: 4px; margin-top: 6px; border-radius: 2px; background: var(--bg-2); overflow: hidden; }
+.uefa-table .ubar i { display: block; height: 100%; border-radius: 2px; background: var(--foot); opacity: .75; }
+.uefa-table tr.zone-top .pos { color: var(--foot); }
+.uefa-table tr.me td { background: rgba(253,218,36,.08); }
+.uefa-table tr.me .ubar i { background: var(--belgium); opacity: 1; }
+.uefa-table tr.me .pos, .uefa-table tr.me .uc b { color: var(--belgium); }
+.uefa-how ul { margin: 6px 0 14px; padding-left: 18px; display: grid; gap: 6px; }
+.uefa-how p { margin: 4px 0 14px; color: var(--muted); }
+.uefa-how p b, .uefa-how li b { color: var(--text); }
+@media (max-width: 640px) {
+  .uefa-star { display: none; }
+  .uefa-table .yr:not(.cur) { display: none; }
+  .uefa-table td, .uefa-table th { padding: 8px 6px; }
+  .uefa-table td.l { min-width: 0; }
+  .uefa-table .tot { font-size: 18px; }
+}
+
+/* pari foot : coefficient UEFA sur la carte, bouton « voir plus » */
+.tcoef { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.tcoef b { color: var(--foot); font-weight: 800; }
+.more-row { margin: 14px 0 4px; text-align: center; }
