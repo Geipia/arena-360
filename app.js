@@ -1797,7 +1797,8 @@ async function renderBelges() {
 }
 
 // ---------- bouton « Admin » : visible seulement si ce téléphone est connecté avec un compte admin
-(async () => {
+// (vérifié à l'ouverture, après une connexion dans « Je parie », et à chaque retour sur l'appli)
+async function checkAdmin() {
   const C = window.ARENA_CONFIG || {};
   if (!C.supabaseUrl) return;
   let session = null, key = "";
@@ -1805,7 +1806,7 @@ async function renderBelges() {
     key = `sb-${new URL(C.supabaseUrl).hostname.split(".")[0]}-auth-token`;
     session = JSON.parse(localStorage.getItem(key) || "null");
   } catch {}
-  if (!session?.access_token) return;
+  if (!session?.access_token) { $("#admin-btn").hidden = true; return; }
   try {
     // la connexion expire au bout d'une heure : on la renouvelle avec le jeton de rafraîchissement
     if (session.expires_at && session.expires_at * 1000 < Date.now() + 60000 && session.refresh_token) {
@@ -1820,9 +1821,12 @@ async function renderBelges() {
     const r = await fetch(`${C.supabaseUrl}/rest/v1/rpc/arena_is_admin`, {
       method: "POST", headers: { apikey: C.supabaseAnonKey, Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" }, body: "{}",
     });
-    if (r.ok && (await r.json()) === true) $("#admin-btn").hidden = false;
+    $("#admin-btn").hidden = !(r.ok && (await r.json()) === true);
   } catch {}
-})();
+}
+window.checkAdmin = checkAdmin;
+checkAdmin();
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkAdmin(); });
 
 // ================================================================= init
 renderSidebar();

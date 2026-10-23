@@ -573,7 +573,7 @@ async function onGameClick(e) {
   if (t.closest("[data-gbe]")) { game.be = !game.be; drawGame(); return; }
   const tier = t.closest("[data-gtier]");
   if (tier) { game.tier = tier.dataset.gtier; drawGame(); return; }
-  if (t.closest("[data-logout]")) { await Backend.logout(); game.me = null; game.draft = []; game.msg = null; drawGame(); return; }
+  if (t.closest("[data-logout]")) { await Backend.logout(); window.checkAdmin?.(); game.me = null; game.draft = []; game.msg = null; drawGame(); return; }
   if (t.closest("[data-refresh]")) {
     const b = t.closest("[data-refresh]"); b.disabled = true; b.textContent = "Mise à jour…";
     await loadLive(true); await refreshPlayers(); return;
@@ -610,6 +610,7 @@ async function onGameSubmit(e) {
     game.draft = [...(game.me?.riders || [])];
     game.tab = game.me?.riders?.length ? "team" : "market";
     refreshPlayers();
+    setTimeout(() => window.checkAdmin?.(), 300);   // compte admin : le bouton « Admin » apparaît tout de suite
     if (game.mode === "foot") { drawGame(); FootGame.init(); game.busy = false; return; }
   } catch (err) { game.msg = { err: true, t: err.message }; }
   game.busy = false; drawGame();
