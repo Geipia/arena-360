@@ -1800,13 +1800,23 @@ async function renderBelges() {
 (async () => {
   const C = window.ARENA_CONFIG || {};
   if (!C.supabaseUrl) return;
-  let session = null;
+  let session = null, key = "";
   try {
-    const ref = new URL(C.supabaseUrl).hostname.split(".")[0];
-    session = JSON.parse(localStorage.getItem(`sb-${ref}-auth-token`) || "null");
+    key = `sb-${new URL(C.supabaseUrl).hostname.split(".")[0]}-auth-token`;
+    session = JSON.parse(localStorage.getItem(key) || "null");
   } catch {}
   if (!session?.access_token) return;
   try {
+    // la connexion expire au bout d'une heure : on la renouvelle avec le jeton de rafraîchissement
+    if (session.expires_at && session.expires_at * 1000 < Date.now() + 60000 && session.refresh_token) {
+      const r = await fetch(`${C.supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST", headers: { apikey: C.supabaseAnonKey, "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: session.refresh_token }),
+      });
+      if (!r.ok) return;
+      const fresh = await r.json();
+      session = { ...session, ...fresh, expires_at: fresh.expires_at || Math.floor(Date.now() / 1000) + (fresh.expires_in || 3600) };
+      try { localStorage.setItem(key, JSON.stringify(session)); } catch {}
+    }
     const r = await fetch(`${C.supabaseUrl}/rest/v1/rpc/arena_is_admin`, {
       method: "POST", headers: { apikey: C.supabaseAnonKey, Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" }, body: "{}",
     });

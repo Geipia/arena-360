@@ -114,7 +114,9 @@
   <script>
   "use strict";
   const C = window.ARENA_CONFIG;
-  const sb = window.supabase.createClient(C.supabaseUrl, C.supabaseAnonKey);
+  const sb = window.supabase.createClient(C.supabaseUrl, C.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+  // retour sur l'appli (écran d'accueil) : on recharge les stats
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && !$("#controls").hidden) load(); });
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const fmt = n => Number(n || 0).toLocaleString("fr-BE");
@@ -126,6 +128,7 @@
       <section class="login">
         <h2>Connexion admin</h2>
         <p class="muted">Utilise le même e-mail et le même mot de passe que ton compte du jeu « Je parie ».</p>
+        ${matchMedia("(display-mode: standalone)").matches || navigator.standalone ? `<p class="muted" style="font-size:12.5px">Appli de l'écran d'accueil : elle a sa propre mémoire, séparée du navigateur. Connecte-toi une seule fois ici, elle restera connectée ensuite.</p>` : ""}
         <form id="f">
           <label>E-mail<input id="email" name="email" type="email" required autocomplete="email"></label>
           <label>Mot de passe<input id="pass" name="password" type="password" required autocomplete="current-password"></label>
