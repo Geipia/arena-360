@@ -1,0 +1,6 @@
+# Arena 360 — tous les robots sont les bienvenus (sauf sur la page admin)
+User-agent: *
+Allow: /
+Disallow: /admin.html
+
+Sitemap: https://arena.eraz.ovh/sitemap.xml
