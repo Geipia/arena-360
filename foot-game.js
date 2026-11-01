@@ -407,7 +407,7 @@ function footDraw() {
   const main = $("#jeu-main");
   if (game.mode !== "foot") return;
   const mk = FMARKET;
-  if (!mk || !fg.me) { main.innerHTML = modeSwitchHTML() + `<div class="loading"><div class="spinner"></div>Chargement des équipes de toute l'Europe…</div>`; return; }
+  if (!mk || !fg.me) { main.innerHTML = modeSwitchHTML() + `<div class="loading"><div class="spinner"><i></i><i></i><i></i></div>Chargement des équipes de toute l'Europe…</div>`; return; }
   const cost = fg.draft.reduce((s, id) => s + priceOf(id), 0);
   const left = FOOT.budget - cost;
   const dirty = JSON.stringify(fg.draft) !== JSON.stringify(fg.me.teams || []);
@@ -538,7 +538,7 @@ function footLoggedOut() {
   return {
     hero: footHeroHTML(),
     previewTitle: "Les équipes les plus chères",
-    preview: mk ? mk.list.slice(0, 10).map(t => teamCard(t, { compact: true })).join("") : `<div class="loading"><div class="spinner"></div>Chargement des équipes…</div>`,
+    preview: mk ? mk.list.slice(0, 10).map(t => teamCard(t, { compact: true })).join("") : `<div class="loading"><div class="spinner"><i></i><i></i><i></i></div>Chargement des équipes…</div>`,
     rules: mk ? footRulesHTML(mk) : "",
   };
 }

@@ -336,9 +336,9 @@ function matchHTML(m) {
   return `
     <div class="match" data-id="${m.id}" ${m.league ? `data-league="${m.league}"` : ""}>
       <div class="status ${m.cls}">${m.state === "pre" ? "À venir" : esc(m.label)}</div>
-      <div class="team home ${res("home")}"><span class="tn" title="${esc(m.home.full)}">${esc(m.home.name)}</span>${m.home.logo ? `<img src="${m.home.logo}" alt="" loading="lazy">` : ""}</div>
+      <div class="team home ${res("home")}"><span class="tn" title="${esc(m.home.full)}" ${m.league ? teamAttr(m.home.id, m.league) : ""}>${esc(m.home.name)}</span>${m.home.logo ? `<img src="${m.home.logo}" alt="" loading="lazy">` : ""}</div>
       ${score}
-      <div class="team away ${res("away")}">${m.away.logo ? `<img src="${m.away.logo}" alt="" loading="lazy">` : ""}<span class="tn" title="${esc(m.away.full)}">${esc(m.away.name)}</span></div>
+      <div class="team away ${res("away")}">${m.away.logo ? `<img src="${m.away.logo}" alt="" loading="lazy">` : ""}<span class="tn" title="${esc(m.away.full)}" ${m.league ? teamAttr(m.away.id, m.league) : ""}>${esc(m.away.name)}</span></div>
       <div class="chev">›</div>
       ${pen}
       ${details}
@@ -351,7 +351,7 @@ $("#foot-main").addEventListener("click", e => {
   else if (m) m.classList.toggle("open");                                // coupes Wikipédia : détail sur place
 });
 
-const loadingHTML = (txt = "Chargement des résultats…") => `<div class="loading"><div class="spinner"></div>${txt}</div>`;
+const loadingHTML = (txt = "Chargement des résultats…") => `<div class="loading"><div class="spinner"><i></i><i></i><i></i></div>${txt}</div>`;
 
 function renderFoot() {
   clearInterval(refreshTimer);
@@ -646,7 +646,7 @@ async function renderStandings(l, slug = l.s) {
         <table class="std">
           <thead><tr><th>#</th><th class="t">Équipe</th><th>J</th><th>G</th><th>N</th><th>P</th><th class="hide-sm">BP</th><th class="hide-sm">BC</th><th>Diff</th><th>Pts</th></tr></thead>
           <tbody>${rows.map(({ rank, e, v, gd }) => `
-            <tr>
+            <tr ${teamAttr(e.team.id, slug)}>
               <td class="rk">${e.note ? `<i style="background:${e.note.color}"></i>` : ""}${rank || ""}</td>
               <td class="t"><div class="tm">${e.team.logos?.[0]?.href ? `<img src="${e.team.logos[0].href}" alt="" loading="lazy">` : ""}${esc(e.team.shortDisplayName || e.team.displayName)}</div></td>
               <td>${v("gamesPlayed")}</td><td>${v("wins")}</td><td>${v("ties")}</td><td>${v("losses")}</td>
@@ -917,6 +917,7 @@ const STAGE_TYPES = [
   [/flat|plain/i, "Plat", "flat"],
 ];
 const stageType = t => { for (const [re, fr, c] of STAGE_TYPES) if (re.test(t || "")) return { fr, c }; return t ? { fr: t, c: "" } : null; };
+const courseFr = c => String(c || "").replace(/\s+to\s+/g, " → ");
 const enDateFr = s => String(s || "").replace(/([A-Z][a-z]+)/g, m => MONTHS[m] != null ? MONTHS_FR[MONTHS[m]] : m);
 const JERSEY_C = { "Général": "#f5c518", "Points": "#2a9d47", "Montagne": "#e63946", "Jeune": "#ffffff", "Sprints": "#2a7bff", "Combativité": "#d08a4a", "Équipes": "#8a97b4" };
 const riderName = n => n.startsWith("team:") ? teamName(n.slice(5)) : n;
@@ -964,29 +965,81 @@ function openRace(key) {
       <div class="table-wrap stage-wrap">
         <table class="race-table stage-table">
           <thead><tr><th>Étape</th><th class="hide-sm">Date</th><th class="hide-sm">Parcours</th><th>Vainqueur</th></tr></thead>
-          <tbody>${r.stages.map(s => {
+          <tbody>${r.stages.map((s, si) => {
             const t = stageType(s.type);
-            return `<tr>
+            return `<tr class="srow" data-stage="${si}" title="Voir le parcours et les côtes">
               <td><span class="snum">${s.n === "P" ? "Prol." : esc(s.n)}</span>${t ? `<span class="stype ${t.c}">${esc(t.fr)}</span>` : ""}</td>
               <td class="rd hide-sm">${esc(enDateFr(s.date))}</td>
-              <td class="sm hide-sm">${esc(s.course)}${s.km ? `<span class="km">${esc(s.km)} km</span>` : ""}</td>
-              <td><div class="rw">${stageWinner(s.winner)}</div>${s.course ? `<div class="rt only-sm">${esc(s.course)}${s.km ? " · " + esc(s.km) + " km" : ""}</div>` : ""}</td>
-            </tr>`;
+              <td class="sm hide-sm">${esc(courseFr(s.course))}${s.km ? `<span class="km">${esc(s.km)} km</span>` : ""}</td>
+              <td><div class="rw">${stageWinner(s.winner)}<span class="sopen">›</span></div>${s.course ? `<div class="rt only-sm">${esc(courseFr(s.course))}${s.km ? " · " + esc(s.km) + " km" : ""}</div>` : ""}</td>
+            </tr>
+            <tr class="sdetail" id="sd-${si}" hidden><td colspan="4"></td></tr>`;
           }).join("")}</tbody>
         </table>
       </div>
+      <p class="hint center">Touche une étape pour voir son parcours et ses côtes.</p>
     </div>`;
+  raceOpen = r;
   let m = $("#race-modal");
   if (!m) {
     m = document.createElement("div");
     m.id = "race-modal";
     m.className = "modal";
-    m.addEventListener("click", e => { if (e.target === m || e.target.closest("[data-close]")) closeRace(); });
+    m.addEventListener("click", e => {
+      if (e.target === m || e.target.closest("[data-close]")) return closeRace();
+      const row = e.target.closest("[data-stage]");
+      if (row) toggleStage(+row.dataset.stage, row);
+    });
     document.body.appendChild(m);
   }
   m.innerHTML = html;
   m.classList.add("show");
   document.body.style.overflow = "hidden";
+}
+/* parcours d'une étape : départ, arrivée, distance, type et côtes (lues sur Wikipédia à la demande) */
+let raceOpen = null;
+const raceTextCache = new Map();
+async function raceTexts(r) {
+  const title = r.page || `${window.CYCLING.season} ${r.race}`;
+  if (raceTextCache.has(title)) return raceTextCache.get(title);
+  const get = async t => { try { const d = await getJSON(`https://en.wikipedia.org/w/api.php?action=parse&format=json&formatversion=2&redirects=1&prop=wikitext&origin=*&page=${encodeURIComponent(t)}`, 24 * 3600e3); return d.parse?.wikitext || ""; } catch { return ""; } };
+  const p = (async () => { const w = await get(title); return [w, ...await Promise.all(CyclingLive.stagePages(w).map(get))]; })();
+  raceTextCache.set(title, p);
+  return p;
+}
+const CAT_FR = { HC: "Hors catégorie", 1: "1re catégorie", 2: "2e catégorie", 3: "3e catégorie", 4: "4e catégorie" };
+async function toggleStage(i, row) {
+  const r = raceOpen, s = r?.stages[i];
+  const det = $("#sd-" + i);
+  if (!s || !det) return;
+  const open = det.hidden;
+  det.hidden = !open; row.classList.toggle("open", open);
+  if (!open || det.dataset.done) return;
+  const t = stageType(s.type);
+  const [from, to] = String(s.course || "").split(/\s+to\s+|\s*[–>]\s*/);
+  const route = `
+    <div class="sd-route">
+      <div class="sd-pt"><i class="dep"></i><small>Départ</small><b>${esc(from || "—")}</b></div>
+      <div class="sd-line"><span>${s.km ? `${esc(s.km)} km` : ""}</span></div>
+      <div class="sd-pt"><i class="arr"></i><small>Arrivée</small><b>${esc(to || from || "—")}</b></div>
+    </div>
+    <div class="sd-tags">${t ? `<span class="stype ${t.c}">${esc(t.fr)}</span>` : ""}${s.date ? `<span class="sd-date">${esc(enDateFr(s.date))}</span>` : ""}</div>`;
+  det.firstElementChild.innerHTML = `<div class="sd">${route}<div class="sd-climbs">${loadingHTML("Recherche des côtes…")}</div></div>`;
+  const texts = await raceTexts(r);
+  const c = CyclingLive.stageClimbs(texts, s.n);
+  det.dataset.done = "1";
+  const box = det.querySelector(".sd-climbs");
+  if (!box) return;
+  // la côte d'arrivée (ex. Alpe d'Huez) passe en dernier
+  const fin = keyOf(to || "");
+  const isFin = k => fin && (fin.includes(keyOf(k.name)) || keyOf(k.name).includes(fin));
+  const list = [...(c?.climbs || [])].sort((x, y) => isFin(x) - isFin(y));
+  box.innerHTML = list.length ? `
+      <div class="mp-title">Côtes de l'étape · ${list.length}${c.summit ? ` <span class="sd-summit">⛰ Arrivée au sommet</span>` : ""}</div>
+      <ol class="sd-list">${list.map((k, j) => `
+        <li><span class="sd-cat c${esc(k.cat || "x")}" title="${esc(CAT_FR[k.cat] || "Catégorie inconnue")}">${k.cat ? esc(k.cat) : "•"}</span>
+          <b>${esc(k.name)}</b>${k.n > 1 ? `<em>×${k.n}</em>` : ""}${isFin(k) ? `<em>🏁 arrivée</em>` : ""}${k.info ? `<span class="sd-info">${esc(k.info)}</span>` : ""}</li>`).join("")}</ol>`
+    : `<p class="hint">${/flat|plat/i.test(s.type || "") ? "Étape plate : pas de grande côte au programme." : /time trial|contre/i.test(s.type || "") ? "Contre-la-montre : parcours sans côte répertoriée." : "Wikipédia ne détaille pas encore les côtes de cette étape."}${c?.summit ? " Arrivée au sommet." : ""}</p>`;
 }
 function closeRace() {
   $("#race-modal")?.classList.remove("show");
@@ -1182,7 +1235,7 @@ function drawMatch() {
   const l = Object.values(BY_SLUG).find(x => x.s === mc.league || x.sub?.some(s => s[0] === mc.league));
   const keyEv = d.keyEvents || [];
   const goals = tid => keyEv.filter(k => k.scoringPlay && k.team?.id === tid && !/shootout/i.test(k.type?.type || ""))
-    .map(k => `${esc(shortName(k.participants?.[0]?.athlete?.displayName || ""))} ${esc(k.clock?.displayValue || "")}${k.type?.type === "own-goal" ? " (c.s.c.)" : /penalty/i.test(k.type?.text || "") ? " (pén.)" : ""}`);
+    .map(k => `<span class="plink" ${playerAttr(k.participants?.[0]?.athlete)}>${esc(shortName(k.participants?.[0]?.athlete?.displayName || ""))}</span> ${esc(k.clock?.displayValue || "")}${k.type?.type === "own-goal" ? " (c.s.c.)" : /penalty/i.test(k.type?.text || "") ? " (pén.)" : ""}`);
   const logo = t => t.team.logos?.[0]?.href || t.team.logo;
   const followTeamBtn = t => bellBtn(PUSH.followsTeam(t.team.id), `data-follow-team="${esc(t.team.id)}" data-name="${esc(t.team.shortDisplayName || t.team.displayName)}" data-logo="${esc(logo(t) || "")}" data-leagues="${esc(mc.league)}"`);
   const scoreBox = played => played
@@ -1197,13 +1250,13 @@ function drawMatch() {
   const head = `
     <div class="mc-league">${l ? `${l.f ? flagImg(l.f) : ""} ${esc(l.c)} · ${esc(l.n)}` : ""} · ${fmtDay(new Date(comp.date))}</div>
     <div class="mc-head">
-      <div class="mc-team">${logo(H) ? `<img src="${logo(H)}" alt="">` : ""}<b>${esc(H.team.displayName)}</b>${followTeamBtn(H)}<div class="mc-goals">${goals(H.team.id).join("<br>")}</div></div>
+      <div class="mc-team"><div class="tlink" ${teamAttr(H.team.id, mc.league)}>${logo(H) ? `<img src="${logo(H)}" alt="">` : ""}<b>${esc(H.team.displayName)}</b></div>${followTeamBtn(H)}<div class="mc-goals">${goals(H.team.id).join("<br>")}</div></div>
       <div class="mc-mid">
         ${scoreBox(played)}
         <div class="mc-status ${live ? "live" : ""}">${live ? `<i></i>${esc(ev.label)}` : played ? esc(ev.label) : "Coup d'envoi"}</div>
         ${pens}
       </div>
-      <div class="mc-team">${logo(A) ? `<img src="${logo(A)}" alt="">` : ""}<b>${esc(A.team.displayName)}</b>${followTeamBtn(A)}<div class="mc-goals">${goals(A.team.id).join("<br>")}</div></div>
+      <div class="mc-team"><div class="tlink" ${teamAttr(A.team.id, mc.league)}>${logo(A) ? `<img src="${logo(A)}" alt="">` : ""}<b>${esc(A.team.displayName)}</b></div>${followTeamBtn(A)}<div class="mc-goals">${goals(A.team.id).join("<br>")}</div></div>
     </div>
     <div class="mc-info">${[venue && "🏟 " + esc(venue), att ? `${Number(att).toLocaleString("fr-BE")} spectateurs` : "", ref && "Arbitre : " + esc(ref)].filter(Boolean).join(" · ")}
       ${played ? `<a class="yt" href="https://www.youtube.com/results?search_query=${encodeURIComponent(`${H.team.displayName} ${A.team.displayName} résumé ${new Date(comp.date).getFullYear()}`)}" target="_blank" rel="noopener">▶ Résumé sur YouTube</a>` : ""}</div>
@@ -1314,7 +1367,7 @@ function lineupsHTML(d, H, A) {
   const rate = (p, home) => started ? playerRating(p, home ? gH : gA, home ? gA : gH) : null;
   const best = (r, home) => (r.roster || []).map(p => ({ p, v: rate(p, home) })).filter(x => x.v != null).sort((a, b) => b.v - a.v)[0];
   const chip = (p, c, home) => `
-    <div class="pl">
+    <div class="pl" ${playerAttr(p.athlete)}>
       <span class="pl-num" style="--tc:${c}">${esc(p.jersey || "")}${ratingBadge(rate(p, home))}</span>
       <span class="pl-name">${esc(p.athlete?.lastName || shortName(p.athlete?.displayName || ""))}</span>
       <span class="pl-marks">${playerMarks(p)}</span>
@@ -1328,7 +1381,7 @@ function lineupsHTML(d, H, A) {
     <div class="bench">
       <div class="mp-title">${esc(t.team.shortDisplayName || t.team.displayName)} · remplaçants</div>
       ${(r.roster || []).filter(p => !p.starter).map(p => `
-        <div class="bench-row ${p.subbedIn ? "played" : ""}">
+        <div class="bench-row ${p.subbedIn ? "played" : ""}" ${playerAttr(p.athlete)}>
           <span class="pl-num sm" style="--tc:${c}">${esc(p.jersey || "")}</span>
           <span class="bn">${esc(p.athlete?.displayName || "")}</span>
           <span class="pl-marks">${playerMarks(p)}</span>
@@ -1336,7 +1389,7 @@ function lineupsHTML(d, H, A) {
         </div>`).join("")}
     </div>`;
   const bH = best(rH, true), bA = best(rA, false);
-  const motm = (b, t) => b ? `<div class="motm"><img src="${t.team.logos?.[0]?.href || ""}" alt=""><div><small>Meilleur joueur · ${esc(t.team.shortDisplayName || t.team.displayName)}</small><b>${esc(b.p.athlete?.displayName || "")}</b></div>${ratingBadge(b.v)}</div>` : "";
+  const motm = (b, t) => b ? `<div class="motm" ${playerAttr(b.p.athlete)}><img src="${t.team.logos?.[0]?.href || ""}" alt=""><div><small>Meilleur joueur · ${esc(t.team.shortDisplayName || t.team.displayName)}</small><b>${esc(b.p.athlete?.displayName || "")}</b></div>${ratingBadge(b.v)}</div>` : "";
   return `
     ${started && (bH || bA) ? `<div class="motms">${motm(bH, H)}${motm(bA, A)}</div><p class="hint center rating-note">Notes sur 10 calculées par Arena à partir des stats du match (buts, passes décisives, tirs, arrêts, cartons, résultat).</p>` : ""}
     <div class="lineups">
@@ -1390,11 +1443,12 @@ function eventsHTML(keyEv, H, A) {
   return `<div class="timeline">${items.map(k => {
     const t = k.type?.type || "";
     const home = k.team?.id === H.team.id;
-    const names = (k.participants || []).map(p => p.athlete?.displayName).filter(Boolean);
+    const ps = (k.participants || []).filter(p => p.athlete?.displayName);
+    const names = ps.map(p => `<span class="plink" ${playerAttr(p.athlete)}>${esc(p.athlete.displayName)}</span>`);
     const icon = k.scoringPlay ? "⚽" : /red/.test(t) ? `<i class="card-r"></i>` : /yellow/.test(t) ? `<i class="card-y"></i>` : /substitution/.test(t) ? "⇄" : "•";
     const txt = /substitution/.test(t) && names.length > 1
-      ? `<span class="in">▲ ${esc(names[0])}</span> <span class="out">▼ ${esc(names[1])}</span>`
-      : `<b>${esc(names[0] || "")}</b>${t === "own-goal" ? " (c.s.c.)" : /penalty/i.test(k.type?.text || "") ? " (pén.)" : ""}${names[1] && k.scoringPlay ? ` <span class="ast">passe : ${esc(names[1])}</span>` : ""}`;
+      ? `<span class="in">▲ ${names[0]}</span> <span class="out">▼ ${names[1]}</span>`
+      : `<b>${names[0] || ""}</b>${t === "own-goal" ? " (c.s.c.)" : /penalty/i.test(k.type?.text || "") ? " (pén.)" : ""}${names[1] && k.scoringPlay ? ` <span class="ast">passe : ${names[1]}</span>` : ""}`;
     return `<div class="tl-row ${home ? "h" : "a"} ${k.scoringPlay ? "goal" : ""}">
       <div class="tl-side">${home ? txt : ""}</div>
       <div class="tl-min"><span>${esc(k.clock?.displayValue || "")}</span><em>${icon}</em></div>
@@ -1696,7 +1750,7 @@ const belInitials = n => String(n).split(/\s+/).filter(Boolean).map(w => w[0]).s
 
 async function renderBelges() {
   const main = $("#foot-main");
-  main.innerHTML = `<div class="loading"><div class="spinner"></div>Chargement de nos Belges…</div>`;
+  main.innerHTML = `<div class="loading"><div class="spinner"><i></i><i></i><i></i></div>Chargement de nos Belges…</div>`;
   let d;
   try { d = await getJSON("belges.json?v=" + new Date().toISOString().slice(0, 13), 30 * 60e3); }
   catch { main.innerHTML = `<div class="empty">Impossible de charger les Belges pour le moment.</div>`; return; }
@@ -1739,7 +1793,7 @@ async function renderBelges() {
       const card = (x, i) => {
         const comps = x.p.comps.filter(c => (bel.kind === "all" || c.kind === bel.kind) && (c.goals || c.assists));
         return `
-        <article class="bel-row ${i < 3 && bel.tab !== "all" && !q ? "top top" + (i + 1) : ""}">
+        <article class="bel-row ${i < 3 && bel.tab !== "all" && !q ? "top top" + (i + 1) : ""}" ${playerAttr({ id: x.p.id })}>
           <span class="bel-rank">${i + 1}</span>
           ${belAvatar(x.p)}
           <div class="bel-id">
@@ -1827,7 +1881,7 @@ function rankBy(list, key) {
 
 async function renderUefa() {
   const main = $("#foot-main");
-  main.innerHTML = `<div class="loading"><div class="spinner"></div>Chargement des coefficients UEFA…</div>`;
+  main.innerHTML = `<div class="loading"><div class="spinner"><i></i><i></i><i></i></div>Chargement des coefficients UEFA…</div>`;
   let d;
   try { d = await loadUefa(); } catch { main.innerHTML = `<div class="empty">Impossible de charger les coefficients UEFA pour le moment.</div>`; return; }
   if (state.view !== "uefa") return;
@@ -1971,6 +2025,286 @@ async function renderUefa() {
     draw();
     const q = $("#uefa-q"); q.focus(); q.setSelectionRange(pos, pos);
   };
+}
+
+// ---------- fiches joueur et club : au clic sur un joueur (compos, buteurs, Nos Belges) ou sur une équipe (matchs, classements)
+const ATH = "https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes";
+function openSheet(html) {
+  let m = $("#sheet-modal");
+  if (!m) {
+    m = document.createElement("div");
+    m.id = "sheet-modal";
+    m.className = "modal sheet-modal";
+    m.addEventListener("click", e => {
+      if (e.target === m || e.target.closest("[data-sclose]")) return closeSheet();
+      const o = e.target.closest("[data-open-league]");
+      if (o) { closeSheet(); closeMatch(); setSport("foot"); openView(o.dataset.openLeague); }
+    });
+    document.body.appendChild(m);
+  }
+  m.innerHTML = `<div class="modal-card sheet-card" role="dialog" aria-modal="true"><button class="modal-x" data-sclose aria-label="Fermer">✕</button><div class="sheet-body">${html}</div></div>`;
+  m.classList.add("show");
+  m.scrollTop = 0;
+  document.body.style.overflow = "hidden";
+  return m;
+}
+const sheetBody = html => { const b = $("#sheet-modal .sheet-body"); if (b) b.innerHTML = html; return b; };
+function closeSheet() {
+  const m = $("#sheet-modal");
+  if (!m) return;
+  m.classList.remove("show"); m.dataset.key = "";
+  if (!document.querySelector(".modal.show")) document.body.style.overflow = "";
+}
+// Échap ferme d'abord la fiche (et pas la fiche du match en dessous)
+window.addEventListener("keydown", e => { if (e.key === "Escape" && $("#sheet-modal.show")) { closeSheet(); e.stopImmediatePropagation(); } }, true);
+
+// un clic sur un joueur ou une équipe ouvre sa fiche (avant les autres clics : ligne de match, etc.)
+document.addEventListener("click", e => {
+  const pl = e.target.closest("[data-player]"), tm = e.target.closest("[data-team]");
+  const el = pl && tm ? (pl.contains(tm) ? tm : pl) : pl || tm;
+  if (!el) return;
+  const inner = e.target.closest("button, a, [data-bel-match], [data-follow-team], [data-follow-league]");
+  if (inner && inner !== el && el.contains(inner)) return;
+  e.preventDefault(); e.stopPropagation();
+  if (el === pl) openPlayer(el.dataset.player);
+  else openTeam(el.dataset.team, el.dataset.league || "");
+}, true);
+const playerAttr = a => a?.id ? `data-player="${esc(a.id)}"` : "";
+const teamAttr = (id, league) => id ? `data-team="${esc(id)}" data-league="${esc(league || "")}"` : "";
+
+const POS_FR = { Goalkeeper: "Gardien", Defender: "Défenseur", Midfielder: "Milieu de terrain", Forward: "Attaquant" };
+const natFrName = (code, en) => { const iso = UEFA_ISO[code]; if (UEFA_FR[code]) return UEFA_FR[code]; try { return iso ? REGION_FR.of(iso.toUpperCase()) : en; } catch { return en || code; } };
+const seasonLbl = (y, nat) => nat ? String(y) : `${y}-${String(y + 1).slice(2)}`;
+const isNationalSlug = slug => !String(slug || "").includes(".") || /\.u-?\d{2}$/.test(slug);   // « bel », « jpn.u23 »
+
+/* carrière : toutes les équipes du joueur, toutes leurs compétitions officielles (ESPN, depuis ~2003) */
+const careerCache = new Map();
+async function playerCareer(id) {
+  if (careerCache.has(id)) return careerCache.get(id);
+  const rows = [], seen = new Set(), teams = new Map(), comps = new Map();
+  const take = d => {
+    Object.values(d.teams || {}).forEach(t => teams.set(t.id, { name: t.shortDisplayName || t.displayName, logo: t.logos?.[0]?.href, slug: t.slug }));
+    Object.values(d.leagues || {}).forEach(l => comps.set(l.slug, l.abbreviation || l.shortName || l.name));
+    const c = (d.categories || []).find(c => (c.names || []).includes("G"));
+    if (!c) return;
+    const ix = n => c.names.indexOf(n);
+    c.statistics.forEach(s => {
+      const k = `${s.teamId}|${s.leagueSlug}|${s.season?.year}`;
+      if (seen.has(k) || /friendly/.test(s.leagueSlug || "")) return;
+      seen.add(k);
+      const v = n => +s.stats[ix(n)] || 0;
+      rows.push({ team: s.teamId, teamSlug: s.teamSlug, league: s.leagueSlug, year: s.season?.year, g: v("G"), a: v("A"), st: v("STRT"), y: v("YC"), r: v("RC") });
+    });
+  };
+  const base = await getJSON(`${ATH}/${id}/stats`, 12 * 3600e3);
+  const teamIds = (base.filters || []).find(f => f.name === "team")?.options.map(o => o.value) || [];
+  await pool(teamIds, 4, async tid => {
+    const d = await getJSON(`${ATH}/${id}/stats?team=${tid}`, 12 * 3600e3).catch(() => null);
+    if (!d) return;
+    take(d);
+    const lf = (d.filters || []).find(f => f.name === "league");
+    const others = (lf?.options || []).map(o => o.value).filter(l => l !== lf.value && !/friendly/.test(l));
+    await pool(others, 4, async l => { const x = await getJSON(`${ATH}/${id}/stats?team=${tid}&league=${l}`, 12 * 3600e3).catch(() => null); if (x) take(x); });
+  });
+  rows.sort((a, b) => b.year - a.year || b.g - a.g);
+  const out = { rows, teams, comps };
+  careerCache.set(id, out);
+  return out;
+}
+
+async function openPlayer(id) {
+  arenaTrack("Foot · fiche joueur");
+  const m = openSheet(loadingHTML("Chargement de la fiche du joueur…"));
+  const key = "p" + id; m.dataset.key = key;
+  let a, bio, ov;
+  try {
+    [a, bio, ov] = await Promise.all([
+      getJSON(`${ATH}/${id}`, 6 * 3600e3),
+      getJSON(`${ATH}/${id}/bio`, 24 * 3600e3).catch(() => null),
+      getJSON(`${ATH}/${id}/overview`, 3600e3).catch(() => null),
+    ]);
+  } catch { if (m.dataset.key === key) sheetBody(`<div class="empty">Impossible de charger ce joueur pour le moment.</div>`); return; }
+  if (m.dataset.key !== key) return;
+  const p = a.athlete;
+  const code = p.citizenshipCountry?.abbreviation;
+  const nat = natFrName(code, p.citizenship);
+  const ft = String(p.displayHeight || "").match(/(\d+)'\s*(\d+)/);
+  const cm = ft ? Math.round((+ft[1] * 12 + +ft[2]) * 2.54) : null;
+  const kg = parseInt(p.displayWeight) ? Math.round(parseInt(p.displayWeight) * .4536) : null;
+  const team = p.team;
+  const ini = belInitials(p.displayName);
+  const facts = [
+    p.position?.displayName && ["Poste", POS_FR[p.position.displayName] || p.position.displayName],
+    p.age && ["Âge", `${p.age} ans${p.displayDOB ? ` · né le ${p.displayDOB}` : ""}`],
+    cm && ["Taille", `${(cm / 100).toFixed(2).replace(".", ",")} m`],
+    kg && ["Poids", `${kg} kg`],
+    p.jersey && ["Numéro", p.jersey],
+  ].filter(Boolean);
+
+  // saison en cours, par compétition
+  const S = ov?.statistics;
+  const ix = n => (S?.names || []).indexOf(n);
+  const sv = (s, n) => ix(n) >= 0 ? +s.stats[ix(n)] || 0 : 0;
+  const splits = (S?.splits || []).filter(s => !/friendly/i.test(s.leagueSlug || s.displayName));
+  const tot = k => splits.reduce((t, s) => t + sv(s, k), 0);
+  const season = splits.length ? `
+    <section class="ps-sec">
+      <div class="pm-title">Cette saison</div>
+      <div class="ps-kpis">
+        <div><b>${tot("totalGoals")}</b><span>buts</span></div>
+        <div><b>${tot("goalAssists")}</b><span>passes D</span></div>
+        <div><b>${tot("starts")}</b><span>titularisations</span></div>
+        <div><b>${tot("totalShots")}</b><span>tirs</span></div>
+        <div><b>${tot("yellowCards")}<i class="card-y"></i>${tot("redCards")}<i class="card-r"></i></b><span>cartons</span></div>
+      </div>
+      <div class="table-wrap"><table class="race-table ps-table">
+        <thead><tr><th>Compétition</th><th>Tit.</th><th>Buts</th><th>Passes D</th><th class="hide-sm">Tirs</th></tr></thead>
+        <tbody>${splits.map(s => `<tr><td>${esc(s.displayName.replace(/^\d{4}(-\d{2})? /, ""))}</td><td>${sv(s, "starts")}</td><td><b>${sv(s, "totalGoals")}</b></td><td>${sv(s, "goalAssists")}</td><td class="hide-sm">${sv(s, "totalShots")}</td></tr>`).join("")}</tbody>
+      </table></div>
+    </section>` : "";
+
+  // parcours (clubs + sélection)
+  const hist = (bio?.teamHistory || []).map(t => ({ ...t, nat: isNationalSlug(t.slug) || /\/countries\//.test(t.logo || ""), from: +String(t.seasons).match(/\d{4}/)?.[0] || 0 }));
+  const yrs = s => String(s || "").split(",").map(x => x.trim().replace("CURRENT", "auj.").replace("-", " – ")).join(", ");
+  const clubs = hist.filter(t => !t.nat).sort((x, y) => y.from - x.from);
+  const sel = hist.find(t => t.nat && !/\.u-?\d{2}$/.test(t.slug)) || hist.find(t => t.nat);
+  const path = clubs.length ? `
+    <section class="ps-sec">
+      <div class="pm-title">Parcours en club</div>
+      <ol class="ps-path">${clubs.map((t, i) => `
+        <li class="${i === 0 ? "now" : ""}" ${teamAttr(t.id, "")}>
+          <img src="${esc(t.logo || "")}" alt="" loading="lazy"><b>${esc(t.displayName)}</b><span>${esc(yrs(t.seasons))}</span>
+        </li>`).join("")}</ol>
+      ${sel ? `<div class="ps-sel"><img src="${esc(sel.logo || "")}" alt=""> Sélection : <b>${esc(nat || sel.displayName)}</b> <span>${esc(yrs(sel.seasons))}</span></div>` : ""}
+    </section>` : "";
+
+  sheetBody(`
+    <div class="ps-hero" style="--tc:#${esc(team?.color && team.color !== "000000" ? team.color : "38d6ff")}">
+      <div class="ps-photo"><span class="mono">${esc(ini)}</span></div>
+      <div class="ps-id">
+        <div class="eyebrow">${p.flag?.href ? `<img class="ps-flag" src="${esc(p.flag.href)}" alt="">` : ""}${esc(nat || "")}</div>
+        <h2>${esc(p.displayName)}</h2>
+        ${team ? `<button class="ps-club" ${teamAttr(team.id, "")}><img src="${esc(team.logos?.[0]?.href || "")}" alt="">${esc(team.displayName)}<span>›</span></button>` : ""}
+      </div>
+    </div>
+    <dl class="ps-facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>
+    ${season}
+    ${path}
+    <section class="ps-sec" id="ps-career"><div class="pm-title">Carrière · buts et passes</div>${loadingHTML("Calcul de toute la carrière…")}</section>
+    <p class="source">Données ESPN, photo Wikipédia. Les statistiques de carrière couvrent les matchs officiels suivis par ESPN (en général depuis le milieu des années 2000) : il peut manquer des matchs anciens.</p>`);
+
+  // photo : ESPN n'en a pas pour le foot, on prend celle de la page Wikipédia du joueur (si c'est bien un footballeur)
+  getJSON(`https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&origin=*&generator=search&gsrsearch=${encodeURIComponent(p.displayName + " footballer")}&gsrlimit=1&prop=pageimages|description&pithumbsize=300`, 7 * 864e5)
+    .then(w => {
+      const pg = w.query?.pages?.[0];
+      const words = keyOf(p.lastName || p.displayName).split(" ");
+      if (!pg?.thumbnail?.source || !/football|soccer/i.test(pg.description || "") || !words.some(x => x.length > 2 && keyOf(pg.title).includes(x)) || m.dataset.key !== key) return;
+      const box = m.querySelector(".ps-photo");
+      if (box) box.innerHTML = `<img src="${esc(pg.thumbnail.source)}" alt="">`;
+    }).catch(() => {});
+
+  try {
+    const c = await playerCareer(id);
+    if (m.dataset.key !== key) return;
+    const box = $("#ps-career");
+    if (!box) return;
+    if (!c.rows.length) { box.innerHTML = `<div class="pm-title">Carrière · buts et passes</div><div class="empty">Pas de statistiques de carrière pour ce joueur.</div>`; return; }
+    const clubR = c.rows.filter(r => !isNationalSlug(r.teamSlug)), natR = c.rows.filter(r => isNationalSlug(r.teamSlug));
+    const sum = (rs, k) => rs.reduce((t, r) => t + r[k], 0);
+    // une ligne par saison et par club (toutes compétitions), la plus récente en haut
+    const bySeason = new Map();
+    c.rows.forEach(r => {
+      const k = `${r.year}|${r.team}`;
+      const o = bySeason.get(k) || { ...r, g: 0, a: 0, st: 0, list: [] };
+      o.g += r.g; o.a += r.a; o.st += r.st; o.list.push(c.comps.get(r.league) || BY_SLUG[r.league]?.n || r.league);
+      bySeason.set(k, o);
+    });
+    const lines = [...bySeason.values()].sort((x, y) => y.year - x.year || (isNationalSlug(x.teamSlug) ? 1 : -1));
+    const best = [...lines].filter(r => !isNationalSlug(r.teamSlug)).sort((x, y) => y.g - x.g)[0];
+    box.innerHTML = `
+      <div class="pm-title">Carrière · buts et passes</div>
+      <div class="ps-kpis big">
+        <div><b>${sum(clubR, "g")}</b><span>buts en club</span></div>
+        <div><b>${sum(clubR, "a")}</b><span>passes D en club</span></div>
+        ${natR.length ? `<div class="nat"><b>${sum(natR, "g")}</b><span>buts en sélection</span></div>` : ""}
+        <div><b>${sum(c.rows, "st")}</b><span>titularisations</span></div>
+      </div>
+      ${best && best.g ? `<p class="hint">Meilleure saison : <b>${best.g} buts</b> en ${seasonLbl(best.year)} avec ${esc(c.teams.get(best.team)?.name || "")}.</p>` : ""}
+      <div class="table-wrap"><table class="race-table ps-table">
+        <thead><tr><th>Saison</th><th>Équipe</th><th class="hide-sm">Compétitions</th><th>Tit.</th><th>Buts</th><th>Passes D</th></tr></thead>
+        <tbody>${lines.map(r => { const t = c.teams.get(r.team); const n = isNationalSlug(r.teamSlug); return `
+          <tr class="${n ? "natrow" : ""}"><td class="rd">${seasonLbl(r.year, n)}</td>
+          <td><div class="rw">${t?.logo ? `<img class="tmini" src="${esc(t.logo)}" alt="">` : ""}${esc(t?.name || "")}</div></td>
+          <td class="sm hide-sm">${esc([...new Set(r.list)].join(", "))}</td><td>${r.st}</td><td><b>${r.g}</b></td><td>${r.a}</td></tr>`; }).join("")}</tbody>
+      </table></div>`;
+  } catch {
+    const box = $("#ps-career");
+    if (box && m.dataset.key === key) box.innerHTML = `<div class="pm-title">Carrière · buts et passes</div><div class="empty">Carrière indisponible pour le moment.</div>`;
+  }
+}
+
+/* fiche club : le classement de sa compétition, avec lui en surbrillance */
+const standingTables = d => (d?.children?.length ? d.children : d?.standings ? [{ name: d.name, standings: d.standings }] : []).filter(g => g.standings?.entries?.length);
+async function openTeam(teamId, league) {
+  arenaTrack("Foot · fiche club");
+  const m = openSheet(loadingHTML("Chargement du classement…"));
+  const key = "t" + teamId + league; m.dataset.key = key;
+  const has = d => standingTables(d).some(g => g.standings.entries.some(e => e.team.id === teamId));
+  let slug = league && !league.startsWith("w:") ? league : "", d = null, sched = null;
+  if (slug) d = await getJSON(`${API_STD}/${slug}/standings`, 300000).catch(() => null);
+  if (!has(d)) {
+    // coupe ou match amical sans classement : on prend le championnat de l'équipe
+    sched = await getJSON(`${API}/all/teams/${teamId}/schedule`, 6 * 3600e3).catch(() => null);
+    const slugs = [...new Set((sched?.events || []).map(e => e.league?.slug).filter(Boolean))];
+    const cand = [...slugs.filter(s => BY_SLUG[s]?.g === "d1"), ...slugs.filter(s => /\.[12]$/.test(s)), ...slugs.filter(s => !/friendly|cup|copa|coupe|pokal|_qual|super/.test(s))];
+    for (const s of cand) {
+      const x = await getJSON(`${API_STD}/${s}/standings`, 300000).catch(() => null);
+      if (has(x)) { slug = s; d = x; break; }
+    }
+  }
+  if (m.dataset.key !== key) return;
+  const tables = standingTables(d).filter(g => g.standings.entries.some(e => e.team.id === teamId));
+  if (!tables.length) {
+    const t = sched?.team;
+    sheetBody(`<div class="ts-head">${t?.logo ? `<img src="${esc(t.logo)}" alt="">` : ""}<div><h2>${esc(t?.displayName || "Équipe")}</h2></div></div><div class="empty">Pas de classement disponible pour cette équipe (compétition à élimination directe ou sélection nationale).</div>`);
+    return;
+  }
+  const l = BY_SLUG[slug];
+  const g = tables[0];
+  const rows = g.standings.entries.map(e => ({ e, st: Object.fromEntries(e.stats.map(s => [s.name, s])) }))
+    .map(x => ({ ...x, v: k => x.st[k]?.displayValue ?? x.st[k]?.value ?? "", rank: +(x.st.rank?.value || 0) })).sort((a, b) => a.rank - b.rank);
+  const me = rows.find(r => r.e.team.id === teamId);
+  const t = me.e.team;
+  const notes = new Map();
+  rows.forEach(r => { if (r.e.note) notes.set(r.e.note.color, r.e.note.description); });
+  sheetBody(`
+    <div class="ts-head">
+      ${t.logos?.[0]?.href ? `<img src="${esc(t.logos[0].href)}" alt="">` : ""}
+      <div>
+        <div class="eyebrow">${l?.f ? flagImg(l.f) : ""} ${esc(l ? `${l.c} · ${l.n}` : d.name || "")}${tables.length && standingTables(d).length > 1 ? ` · ${esc(g.name)}` : ""}</div>
+        <h2>${esc(t.displayName)}</h2>
+      </div>
+    </div>
+    <div class="ps-kpis">
+      <div class="hl"><b>${me.rank}<sup>${me.rank === 1 ? "er" : "e"}</sup></b><span>au classement</span></div>
+      <div><b>${me.v("points")}</b><span>points</span></div>
+      <div><b>${me.v("gamesPlayed")}</b><span>matchs</span></div>
+      <div><b>${me.v("wins")}-${me.v("ties")}-${me.v("losses")}</b><span>V-N-D</span></div>
+      <div><b>${me.v("pointDifferential")}</b><span>diff. de buts</span></div>
+    </div>
+    <div class="table-wrap"><table class="std ts-table">
+      <thead><tr><th>#</th><th class="t">Équipe</th><th>J</th><th class="hide-sm">G</th><th class="hide-sm">N</th><th class="hide-sm">P</th><th>Diff</th><th>Pts</th></tr></thead>
+      <tbody>${rows.map(r => `
+        <tr class="${r.e.team.id === teamId ? "me" : ""}" ${teamAttr(r.e.team.id, slug)}>
+          <td class="rk">${r.e.note ? `<i style="background:${r.e.note.color}"></i>` : ""}${r.rank || ""}</td>
+          <td class="t"><div class="tm">${r.e.team.logos?.[0]?.href ? `<img src="${r.e.team.logos[0].href}" alt="" loading="lazy">` : ""}${esc(r.e.team.shortDisplayName || r.e.team.displayName)}</div></td>
+          <td>${r.v("gamesPlayed")}</td><td class="hide-sm">${r.v("wins")}</td><td class="hide-sm">${r.v("ties")}</td><td class="hide-sm">${r.v("losses")}</td>
+          <td>${r.v("pointDifferential")}</td><td class="pts">${r.v("points")}</td>
+        </tr>`).join("")}</tbody>
+    </table></div>
+    ${notes.size ? `<div class="legend">${[...notes].map(([c, n]) => `<span><i style="background:${c}"></i>${esc(n)}</span>`).join("")}</div>` : ""}
+    ${l ? `<div class="center"><button class="ghost" data-open-league="${esc(slug)}">Voir tout le championnat ›</button></div>` : ""}`);
+  m.querySelector("tr.me")?.scrollIntoView({ block: "center" });
 }
 
 // ---------- notifications : suivre des équipes / championnats (coup d'envoi, buts, résultat)
@@ -2161,3 +2495,25 @@ if (["velo", "jeu"].includes(store.get("sport", "foot"))) setSport(store.get("sp
 else arenaTrack(footSection(state.view));
 openFromHash();
 PUSH.sync();
+
+// logo : retour à l'accueil, comme à l'ouverture (foot, tous les matchs du jour)
+function goHome() {
+  closeSheet(); closeMatch(); closeRace();
+  state.day = new Date();
+  state.filter = ""; const ls = $("#league-search"); if (ls) ls.value = "";
+  setSport("foot");
+  openView("today");
+  $("#foot-sidebar").classList.remove("open");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+$("#brand").addEventListener("click", goHome);
+$("#brand").addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goHome(); } });
+
+// écran d'ouverture : il s'efface dès que la page est prête (au moins 0,9 s pour voir l'animation)
+const splashStart = performance.now();
+window.addEventListener("load", () => setTimeout(() => {
+  const sp = $("#splash");
+  if (!sp) return;
+  sp.classList.add("out");
+  setTimeout(() => sp.remove(), 600);
+}, Math.max(0, 900 - (performance.now() - splashStart))));

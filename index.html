@@ -27,11 +27,25 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=32">
+  <link rel="stylesheet" href="styles.css?v=33">
 </head>
 <body data-sport="foot">
+  <div id="splash" aria-hidden="true">
+    <div class="sp-inner">
+      <svg class="sp-logo" viewBox="0 0 48 48">
+        <defs><linearGradient id="sp-ring" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#38d6ff"/><stop offset=".5" stop-color="#ffd21f"/><stop offset="1" stop-color="#ff4f8b"/></linearGradient></defs>
+        <path class="beam" d="M12 9.5l3.2-5.5h3.4l-3.2 5.5z" fill="#38d6ff"/>
+        <path class="beam" d="M22.3 9.5l3.2-5.5h3.4l-3.2 5.5z" fill="#ffd21f"/>
+        <path class="beam" d="M32.6 9.5l3.2-5.5h3.4l-3.2 5.5z" fill="#ff4f8b"/>
+        <ellipse cx="24" cy="28" rx="20" ry="12.5" fill="none" stroke="url(#sp-ring)" stroke-width="4.2"/>
+        <path class="pulse" d="M3 28h11.5l3.6-8.5 5.2 16 4.4-11.5 2.6 4H45" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="sp-word"><b>ARENA</b><span>360</span></div>
+      <div class="spinner"><i></i><i></i><i></i></div>
+    </div>
+  </div>
   <header class="topbar">
-    <div class="brand">
+    <div class="brand" id="brand" role="link" tabindex="0" aria-label="Accueil : tous les matchs du jour" title="Accueil">
       <svg class="logo" viewBox="0 0 48 48" aria-hidden="true">
         <defs>
           <linearGradient id="lg-ring" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#38d6ff"/><stop offset=".5" stop-color="#ffd21f"/><stop offset="1" stop-color="#ff4f8b"/></linearGradient>
@@ -90,13 +104,13 @@
 
   <button class="menu-fab" id="menu-fab" aria-label="Compétitions">☰</button>
 
-  <script src="wiki-cups.js?v=32"></script>
-  <script src="cycling-data.js?v=32"></script>
-  <script src="config.js?v=32"></script>
-  <script src="cycling-live.js?v=32"></script>
-  <script src="app.js?v=32"></script>
-  <script src="game.js?v=32"></script>
-  <script src="wiki-leagues.js?v=32"></script>
-  <script src="foot-game.js?v=32"></script>
+  <script src="wiki-cups.js?v=33"></script>
+  <script src="cycling-data.js?v=33"></script>
+  <script src="config.js?v=33"></script>
+  <script src="cycling-live.js?v=33"></script>
+  <script src="app.js?v=33"></script>
+  <script src="game.js?v=33"></script>
+  <script src="wiki-leagues.js?v=33"></script>
+  <script src="foot-game.js?v=33"></script>
 </body>
 </html>

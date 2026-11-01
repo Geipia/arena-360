@@ -367,7 +367,7 @@ function riderCard(r, { inTeam, canAdd, compact, pts } = {}) {
 
 async function renderGame() {
   const main = $("#jeu-main");
-  if (!HISTORY) { main.innerHTML = `<div class="loading"><div class="spinner"></div>Chargement du jeu…</div>`; await loadHistory(); }
+  if (!HISTORY) { main.innerHTML = `<div class="loading"><div class="spinner"><i></i><i></i><i></i></div>Chargement du jeu…</div>`; await loadHistory(); }
   const m = buildMarket();
   if (!main.dataset.ready) {
     main.dataset.ready = "1";
@@ -375,7 +375,7 @@ async function renderGame() {
     main.addEventListener("input", onGameInput);
     main.addEventListener("submit", onGameSubmit);
   }
-  main.innerHTML = `<div class="loading"><div class="spinner"></div>Chargement du jeu…</div>`;
+  main.innerHTML = `<div class="loading"><div class="spinner"><i></i><i></i><i></i></div>Chargement du jeu…</div>`;
   try { game.me = await Backend.me(); } catch (e) { game.me = null; game.msg = { err: true, t: e.message }; }
   game.draft = game.me ? [...game.me.riders] : [];
   drawGame();

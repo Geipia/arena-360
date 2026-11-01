@@ -222,7 +222,60 @@
     return D;
   }
 
-  const api = { loadSeason, parseCalendar, parseMedals, parseStageRace, isStageRace, clean };
+
+  // ---------------------------------------------------------------- côtes d'une étape (lues dans le texte de Wikipédia)
+  // Les grands tours ont des pages « Stage 1 to Stage 11 » ; les autres courses décrivent parfois leurs étapes sur leur propre page.
+  const CLIMB_WORDS = "Côte|Cote|Col|Colle|Cima|Passo|Alto|Puerto|Mont|Montée|Monte|Port|Puy|Plateau|Mur|Muur|Collado|Coll|Sella|Croix|Pic|Pico|Cuitu|Lacets|Hautacam|Tourmalet|Angliru|Oude Kwaremont|Kwaremont|Paterberg|Koppenberg|Kemmelberg|Mortirolo|Stelvio|Zoncolan|Galibier|Ventoux|Alpe|Superbagnères|Peyragudes|Hourquette|Tre Cime|Blockhaus|Etna|Gavia|Finestre|Madeleine|Glandon|Izoard|Joux Plane|Cauberg|Mur de Huy|Redoute|Poggio|Cipressa|Wall|Berg";
+  const SOLO = /^(Hautacam|Tourmalet|Angliru|Kwaremont|Paterberg|Koppenberg|Kemmelberg|Mortirolo|Stelvio|Zoncolan|Galibier|Ventoux|Peyragudes|Superbagnères|Blockhaus|Etna|Gavia|Finestre|Madeleine|Izoard|Glandon|Cauberg|Redoute|Poggio|Cipressa)$/;
+  const CATS = { "hors catégorie": "HC", "hors-catégorie": "HC", first: "1", second: "2", third: "3", fourth: "4", "1st": "1", "2nd": "2", "3rd": "3", "4th": "4" };
+  const CONNECT = "(?:\\s(?:de|du|des|de la|di|del|della|van|à|en|la|le|des|de l'|d'))*\\s?(?:d'|l')?";
+  const CLIMB_RE = new RegExp(`((?:hors[ -]catégorie|first|second|third|fourth|1st|2nd|3rd|4th)[- ]category\\s+(?:climbs?\\s+(?:of|to|up)\\s+(?:the\\s+)?)?)?\\b((?:${CLIMB_WORDS})(?:${CONNECT}[A-ZÀ-Ž][\\wÀ-ž'’.-]*){0,4})(\\s*\\(([^)]*?(?:km|%|metres|m\\b)[^)]*)\\))?`, "g");
+
+  function stageSection(w, n) {
+    const head = n === "P" ? /^==+\s*Prologue[^=\n]*==+\s*$/m : new RegExp(`^==+\\s*Stage\\s+${n}\\b[^=\\n]*==+\\s*$`, "m");
+    const m = String(w || "").match(head);
+    if (!m) return null;
+    const rest = w.slice(m.index + m[0].length);
+    const end = rest.search(/^==[^=]/m);
+    return end > 0 ? rest.slice(0, end) : rest;
+  }
+  function frInfo(s) {
+    return s.replace(/,?\s*with (?:the|its) summit at (?:an elevation|an altitude) of\s*/i, " · sommet à ")
+      .replace(/at an average (?:gradient )?of|averaging|with an average gradient of|average gradient of/gi, "à").replace(/\bmetres\b/g, "m")
+      .replace(/(\d)\.(\d)/g, "$1,$2").replace(/\s+/g, " ").replace(/\s*· sommet à\s*$/, "").trim();
+  }
+  function stageClimbs(texts, n) {
+    const sec = texts.map(t => stageSection(t, n)).find(Boolean);
+    if (!sec) return null;
+    const t = clean(sec.split(/\n\{\|/)[0].replace(/\{\{convert\|([\d.,]+)\|(m|km)\b[^}]*\}\}/g, "$1 $2")).replace(/&nbsp;/g, " ");
+    const out = new Map();
+    let m;
+    CLIMB_RE.lastIndex = 0;
+    while ((m = CLIMB_RE.exec(t))) {
+      let name = m[2].replace(/[’']s$/, "").replace(/\s+(?:in|on|at|and|the|with|before|after)$/, "").trim();
+      const words = name.split(/\s+/);
+      if (words.length < 2 && !SOLO.test(name)) continue;
+      if (/^(Mont|Monte|Port|Pla|Alpe|Croix|Wall|Berg)$/.test(name) || /^(Col|Côte|Mur|Alto|Puerto)\s+(?:de|du|des)$/.test(name)) continue;
+      const before = t.slice(Math.max(0, m.index - 60), m.index).toLowerCase();
+      const cm = (m[1] || "").toLowerCase().match(/hors[ -]catégorie|first|second|third|fourth|1st|2nd|3rd|4th/)
+        || before.match(/(hors[ -]catégorie|first|second|third|fourth)[- ]category(?:[^.]{0,25})$/);
+      const o = out.get(name) || { name, cat: null, info: null, n: 1 };
+      if (!o.cat && cm) o.cat = CATS[(cm[1] || cm[0]).replace(/-/g, " ").replace("hors catégorie", "hors catégorie")] || CATS[cm[1] || cm[0]] || null;
+      if (!o.info && m[4]) o.info = frInfo(m[4]);
+      out.set(name, o);
+    }
+    // nombre d'ascensions annoncé (« three ascents of the Côte… »)
+    const count = { two: 2, three: 3, four: 4, five: 5, twice: 2 };
+    out.forEach(o => { const r = t.match(new RegExp(`(two|three|four|five) (?:ascents|climbs|times)[^.]{0,30}${o.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i")); if (r) o.n = Math.max(o.n, count[r[1].toLowerCase()]); });
+    const summit = /summit finish|mountain-top finish|uphill finish|finish(?:ed|ing)? (?:was )?(?:located )?(?:at|on) (?:the )?(?:top|summit)|ended (?:at|on) the (?:top|summit)/i.test(t);
+    return { climbs: [...out.values()], summit, described: t.trim().length > 200 };
+  }
+  // pages de la course : la page principale + les pages « Stage X to Stage Y » qu'elle cite
+  function stagePages(w) {
+    return [...new Set((String(w || "").match(/\[\[(\d{4} [^\]|#]+, Stage \d+ to Stage \d+)/g) || []).map(x => x.slice(2)))];
+  }
+
+  const api = { loadSeason, parseCalendar, parseMedals, parseStageRace, isStageRace, clean, stageClimbs, stagePages };
   root.CyclingLive = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);
