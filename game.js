@@ -406,7 +406,7 @@ function drawGame() {
     <section class="g-hero">
       <div class="g-hero-text">
         <div class="eyebrow">Jeu · saison ${YEAR}</div>
-        <h1>Je parie</h1>
+        <h1>Mes équipes</h1>
         <p>Compose une équipe de ${SIZE} coureurs avec ${BUDGET} points de budget fictif. Pendant la saison ${YEAR}, chaque victoire, podium, étape ou maillot de tes coureurs te rapporte des points. Le meilleur total à la fin de l'année gagne.</p>
       </div>
       <div class="g-hero-side">

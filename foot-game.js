@@ -366,7 +366,7 @@ function footHeroHTML(mine = null, changesLeft = FOOT.maxChanges) {
     <section class="g-hero foot">
       <div class="g-hero-text">
         <div class="eyebrow">Jeu · saison ${FOOT.season}</div>
-        <h1>Je parie · Foot</h1>
+        <h1>Mes équipes · Foot</h1>
         <p>Choisis ${FOOT.size} équipes parmi tous les championnats d'Europe avec ${FOOT.budget} points de budget. Le jeu démarre au <b>mercato de janvier</b> (1er janvier 2027) : d'ici là, tu changes tes équipes autant que tu veux. Ensuite, chaque victoire rapporte des points (plus en coupe d'Europe), et chaque semaine en tête de son championnat aussi. Le meilleur total au ${FOOT.end.toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })} gagne.</p>
       </div>
       <div class="g-hero-side">

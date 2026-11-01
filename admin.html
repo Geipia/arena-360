@@ -127,7 +127,7 @@
     $("#app").innerHTML = `
       <section class="login">
         <h2>Connexion admin</h2>
-        <p class="muted">Utilise le même e-mail et le même mot de passe que ton compte du jeu « Je parie ».</p>
+        <p class="muted">Utilise le même e-mail et le même mot de passe que ton compte du jeu « Mes équipes ».</p>
         ${matchMedia("(display-mode: standalone)").matches || navigator.standalone ? `<p class="muted" style="font-size:12.5px">Appli de l'écran d'accueil : elle a sa propre mémoire, séparée du navigateur. Connecte-toi une seule fois ici, elle restera connectée ensuite.</p>` : ""}
         <form id="f">
           <label>E-mail<input id="email" name="email" type="email" required autocomplete="email"></label>
