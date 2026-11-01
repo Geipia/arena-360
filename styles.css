@@ -1473,3 +1473,25 @@ body::before { opacity: .04; }
 .modal { background: rgba(8, 12, 32, .65); }
 .std tbody tr:nth-child(even) td, .race-table tbody tr:nth-child(even) td { background: rgba(255,255,255,.025); }
 #splash { background: radial-gradient(600px 340px at 50% 42%, rgba(56,214,255,.22), transparent 70%), radial-gradient(500px 300px at 70% 70%, rgba(255,79,139,.18), transparent 70%), #0f1734; }
+
+/* chargement d'une étape : petit coureur qui grimpe */
+.bike-load { display: grid; justify-items: center; gap: 6px; padding: 10px 0 14px; }
+.bike-load svg { width: min(320px, 90%); height: auto; overflow: visible; }
+.bl-hill { fill: url(#bl-g); opacity: .14; }
+.bl-road { fill: none; stroke: url(#bl-g); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 6 7; animation: bl-dash 1s linear infinite; }
+@keyframes bl-dash { to { stroke-dashoffset: -13; } }
+.bl-wheel circle { fill: none; stroke: #fff; stroke-width: 1.6; }
+.bl-wheel path { stroke: rgba(255,255,255,.6); stroke-width: .8; }
+.bl-frame { fill: none; stroke: #ffd21f; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.bl-body { fill: none; stroke: #38d6ff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.bl-head { fill: #ff4f8b; }
+.bl-bike { filter: drop-shadow(0 0 6px rgba(255,210,31,.6)); }
+.bike-load span { font: 800 13px var(--display); letter-spacing: 1.6px; text-transform: uppercase; color: var(--velo); animation: bl-blink 1.4s ease-in-out infinite; }
+@keyframes bl-blink { 50% { opacity: .45; } }
+/* chiffres clés du profil */
+.pf-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pf-facts span { padding: 4px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-size: 12px; font-weight: 700; }
+.pf-official { display: block; border-radius: 12px; overflow: hidden; background: #fff; border: 1px solid var(--line); }
+.pf-official img { display: block; width: 100%; height: auto; }
+.sd-km { margin-left: auto; font: 800 12px var(--display); letter-spacing: .5px; color: var(--velo); }
+.pf-none { padding: 12px 14px; border-radius: 10px; background: var(--panel); border: 1px dashed var(--line); }

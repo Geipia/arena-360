@@ -1018,6 +1018,22 @@ async function raceTexts(r) {
   raceTextCache.set(title, p);
   return p;
 }
+/* Wikipédia en français : page de la course + article de l'étape (profil officiel, côtes dans l'ordre avec leur kilomètre) */
+const frCache = new Map();
+async function frStage(r, n) {
+  const title = r.page || `${window.CYCLING.season} ${r.race}`;
+  const get = async t => { try { const d = await getJSON(`https://fr.wikipedia.org/w/api.php?action=parse&format=json&formatversion=2&redirects=1&prop=wikitext&origin=*&page=${encodeURIComponent(t)}`, 24 * 3600e3); return d.parse?.wikitext || ""; } catch { return ""; } };
+  if (!frCache.has(title)) frCache.set(title, (async () => {
+    const ll = await getJSON(`https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&origin=*&redirects=1&prop=langlinks&lllang=fr&titles=${encodeURIComponent(title)}`, 7 * 864e5).catch(() => null);
+    const fr = ll?.query?.pages?.[0]?.langlinks?.[0]?.title;
+    return fr ? get(fr) : "";
+  })());
+  const w = await frCache.get(title);
+  if (!w) return null;
+  const art = CyclingLive.frStageTitle(w, n);
+  return CyclingLive.frStageInfo([w, art ? await get(art) : ""].filter(Boolean), n);
+}
+
 /* profil d'une étape : relief réel (Open-Meteo) le long du trajet départ → côtes → arrivée (positions Wikipédia).
    Le tracé exact des routes n'est pas connu : c'est un profil approximatif, mais les sommets et leur altitude sont réels. */
 const WIKI_Q = "https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&origin=*&redirects=1&prop=coordinates&colimit=50";
@@ -1049,15 +1065,144 @@ async function placeCoords(names) {
 }
 const hav = (a, b) => { const R = 6371, r = x => x * Math.PI / 180; const dl = r(b.lat - a.lat), dn = r(b.lon - a.lon); const h = Math.sin(dl / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dn / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
 const profileCache = new Map();
-async function stageProfile(key, from, to, climbs, km) {
+/* profil sur la vraie route : itinéraire vélo OpenStreetMap passant par le départ, chaque col et l'arrivée,
+   puis l'altitude (Open-Meteo, modèle de terrain à 90 m) en 200 points le long du trajet */
+const ROUTERS = ["https://routing.openstreetmap.de/routed-bike/route/v1/driving/", "https://router.project-osrm.org/route/v1/driving/"];
+async function realRouteProfile(pts, km) {
+  const path = pts.map(p => `${p.lon.toFixed(5)},${p.lat.toFixed(5)}`).join(";");
+  let route = null;
+  for (const base of ROUTERS) {
+    const d = await getJSON(`${base}${path}?overview=full&geometries=geojson&continue_straight=true`, 30 * 864e5).catch(() => null);
+    if (d?.code === "Ok" && d.routes?.[0]?.geometry?.coordinates?.length > 1) { route = d.routes[0]; break; }
+  }
+  if (!route) return null;
+  const g = route.geometry.coordinates.map(([lon, lat]) => ({ lat, lon }));
+  const cum = [0];
+  for (let i = 1; i < g.length; i++) cum.push(cum[i - 1] + hav(g[i - 1], g[i]));
+  const tot = cum[cum.length - 1];
+  if (tot < 2) return null;
+  // un trajet routier bien plus long que l'étape annoncée = mauvais lieu trouvé : on n'en veut pas
+  const official = +String(km || "").replace(",", ".");
+  if (official && tot > official * 1.9) return null;
+  // trajet direct bien plus court que l'étape : elle fait des boucles qu'on ne connaît pas → pas de faux profil
+  if (official && tot < official * .5) return { loops: true, direct: tot };
+  const N = 200, samples = [];
+  for (let i = 0, j = 0; i < N; i++) {
+    const d = tot * i / (N - 1);
+    while (j < cum.length - 2 && cum[j + 1] < d) j++;
+    const f = cum[j + 1] > cum[j] ? (d - cum[j]) / (cum[j + 1] - cum[j]) : 0;
+    samples.push({ lat: g[j].lat + (g[j + 1].lat - g[j].lat) * f, lon: g[j].lon + (g[j + 1].lon - g[j].lon) * f });
+  }
+  const els = await Promise.all([samples.slice(0, 100), samples.slice(100)].map(part =>
+    getJSON(`https://api.open-meteo.com/v1/elevation?latitude=${part.map(s => s.lat.toFixed(4)).join(",")}&longitude=${part.map(s => s.lon.toFixed(4)).join(",")}`, 30 * 864e5)));
+  const raw = els.flatMap(e => e.elevation || []);
+  if (raw.length !== N) return null;
+  // léger lissage (le modèle de terrain voit parfois un ravin à côté de la route)
+  const alt = raw.map((a, i) => (raw[Math.max(0, i - 1)] + 2 * a + raw[Math.min(N - 1, i + 1)]) / 4);
+  const dist = official || tot, sc = dist / tot;
+  const legX = [0];
+  pts.slice(1).forEach((_, i) => legX.push(legX[i] + (route.legs?.[i]?.distance / 1000 || 0)));
+  const anchors = [{ r: 0, o: 0 }, ...pts.map((p, i) => ({ r: legX[i], o: p.km })).filter(a => a.o != null && a.o > 0 && a.o < dist), { r: tot, o: dist }]
+    .filter((a, i, arr) => !i || (a.r > arr[i - 1].r && a.o > arr[i - 1].o));
+  const toKm = rx => { for (let i = 1; i < anchors.length; i++) if (rx <= anchors[i].r || i === anchors.length - 1) { const a = anchors[i - 1], b = anchors[i]; return a.o + (b.o - a.o) * Math.min(1, (rx - a.r) / ((b.r - a.r) || 1)); } return rx * sc; };
+  const curve = alt.map((a, i) => ({ x: toKm(tot * i / (N - 1)), alt: Math.max(0, a) }));
+  const marks = pts.map((p, i) => {
+    const x = Math.min(dist, p.km != null ? p.km : toKm(legX[i])), k = curve.reduce((best, c, j) => Math.abs(c.x - x) < Math.abs(curve[best].x - x) ? j : best, 0);
+    const near = curve.slice(Math.max(0, k - 2), k + 3).map(c => c.alt);
+    return { ...p, x, alt: p.kind === "climb" ? Math.max(...near) : curve[Math.min(N - 1, k)].alt };
+  });
+  // dénivelé positif : on ne compte une montée qu'au-delà de 15 m (le bruit du terrain gonfle sinon le total)
+  let up = 0, low = alt[0], high = alt[0], climbing = false;
+  for (const a of alt) {
+    if (climbing) { if (a > high) high = a; else if (high - a > 15) { up += high - low; low = a; climbing = false; } }
+    else { if (a < low) low = a; else if (a - low > 15) { climbing = true; high = a; } }
+  }
+  if (climbing) up += high - low;
+  // plus de ~42 m de dénivelé par km n'existe pas en course : mauvais lieu ou mauvais trajet → pas de faux profil
+  if (up / dist > 42) return { loops: true, direct: tot };
+  return { dist, curve, marks, real: true, gain: Math.round(up / 10) * 10 };
+}
+
+/* chargement des étapes : un petit coureur qui grimpe une côte */
+const bikeLoaderHTML = (txt = "Le coureur reconnaît le parcours…") => `
+  <div class="bike-load">
+    <svg viewBox="0 0 260 96" aria-hidden="true">
+      <defs><linearGradient id="bl-g" x1="0" x2="1"><stop offset="0" stop-color="#38d6ff"/><stop offset=".5" stop-color="#ffd21f"/><stop offset="1" stop-color="#ff4f8b"/></linearGradient></defs>
+      <path class="bl-hill" d="M0,84 C30,84 45,70 70,64 S110,30 140,26 S180,52 200,48 S240,20 260,16 L260,96 L0,96Z"/>
+      <path class="bl-road" d="M0,84 C30,84 45,70 70,64 S110,30 140,26 S180,52 200,48 S240,20 260,16"/>
+      <g class="bl-bike">
+        <animateMotion dur="3s" repeatCount="indefinite" rotate="auto" path="M0,84 C30,84 45,70 70,64 S110,30 140,26 S180,52 200,48 S240,20 260,16"/>
+        <g transform="translate(-13,-19)">
+          <g class="bl-wheel" transform="translate(5,14)"><circle r="5"/><path d="M-5,0H5M0,-5V5"/><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur=".6s" additive="sum" repeatCount="indefinite"/></g>
+          <g class="bl-wheel" transform="translate(21,14)"><circle r="5"/><path d="M-5,0H5M0,-5V5"/><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur=".6s" additive="sum" repeatCount="indefinite"/></g>
+          <path class="bl-frame" d="M5,14 L11,6 L19,6 L21,14 M11,6 L13,14 L19,6 M10,4 L13,4 M19,6 L20,3"/>
+          <circle class="bl-head" cx="17" cy="-5" r="2.6"/>
+          <path class="bl-body" d="M12,4 L17,-2 L20,3 M17,-2 L13,9"/>
+        </g>
+      </g>
+    </svg>
+    <span>${txt}</span>
+  </div>`;
+
+async function stageProfile(key, from, to, climbs, km, ordered = false) {
   if (profileCache.has(key)) return profileCache.get(key);
   const place = n => String(n || "").replace(/\s*\(.*?\)\s*/g, " ").trim();
-  const stops = [{ name: place(from), kind: "dep" }, ...climbs.map(c => ({ name: c.name, kind: "climb", cat: c.cat, info: c.info })), { name: place(to || from), kind: "arr" }]
+  const stops = [{ name: place(from), kind: "dep" }, ...climbs.map(c => ({ name: c.name.replace(/^Montée vers /, ""), label: c.name, kind: "climb", cat: c.cat, info: c.info, km: c.km })), { name: place(to || from), kind: "arr" }]
     .filter((s, i, a) => s.name && !(i && s.name === a[i - 1].name));
   const co = await placeCoords([...new Set(stops.map(s => s.name))]);
+  // un lieu trouvé à plus de 300 km du départ est un homonyme (« Pila » en Pologne au lieu de Pila, au-dessus d'Aoste) :
+  // on le recherche à nouveau sur la carte, seulement autour du départ
+  const dep = co.get(stops[0].name);
+  // rayon plausible autour du départ : une étape ne s'éloigne pas de plus de ~60 % de sa longueur
+  const R = Math.min(160, Math.max(40, (+String(km || "").replace(",", ".") || 160) * .6));
+  if (dep) for (const s of stops.slice(1)) {
+    const c = co.get(s.name);
+    if (c && hav(dep, c) <= R) continue;
+    co.delete(s.name);
+    // variantes : nom complet, puis sans « Col du / Côte de / Montée vers » (« Lin Noir » plutôt que « Col du Lin-Noir »)
+    const bare = s.name.replace(/^(?:Col|Côte|Colle|Mur|Montée vers|Montée|Passo|Alto|Puerto|Cima)\s+(?:de la |de l'|du |des |de |d'|di |del |della )?/i, "").replace(/-/g, " ");
+    const box = [dep.lon - 1.6, dep.lat + 1.2, dep.lon + 1.6, dep.lat - 1.2].map(v => v.toFixed(3)).join(",");
+    for (const v of [...new Set([s.name, bare])]) {
+      const r = await getJSON(`https://nominatim.openstreetmap.org/search?format=json&limit=5&accept-language=fr&bounded=1&viewbox=${box}&q=${encodeURIComponent(v)}`, 30 * 864e5).catch(() => null);
+      await new Promise(res => setTimeout(res, 1000));
+      const word = keyOf(bare).split(" ").sort((a, b) => b.length - a.length)[0] || "";
+      const hit = (r || []).find(x => hav(dep, { lat: +x.lat, lon: +x.lon }) <= R && keyOf(x.display_name).includes(word));
+      if (hit) { co.set(s.name, { lat: +hit.lat, lon: +hit.lon }); break; }
+    }
+  }
   let pts = stops.map(s => ({ ...s, ...co.get(s.name) })).filter(s => s.lat != null);
-  if (pts.length > 2) { const c = pts[0]; pts = pts.filter(p => hav(c, p) < 600); }   // homonyme à l'autre bout du monde
+  if (pts.length > 2) {
+    // point aberrant (homonyme loin du parcours) : trop loin du « centre » de l'étape
+    const mid = { lat: [...pts.map(p => p.lat)].sort((a, b) => a - b)[pts.length >> 1], lon: [...pts.map(p => p.lon)].sort((a, b) => a - b)[pts.length >> 1] };
+    pts = pts.filter(p => hav(mid, p) < 250);
+  }
   if (pts.length < 2) { profileCache.set(key, null); return null; }
+  // le texte de Wikipédia ne cite pas toujours les côtes dans l'ordre de la course :
+  // on garde l'ordre qui fait le chemin le plus court entre le départ et l'arrivée
+  if (pts.length > 2 && pts.slice(1, -1).every(p => p.km != null)) {
+    pts = [pts[0], ...pts.slice(1, -1).sort((a, b) => a.km - b.km), pts[pts.length - 1]];   // ordre officiel (kilomètres connus)
+  } else if (pts.length > 3 && pts.length <= 9) {
+    const first = pts[0], last = pts[pts.length - 1], mid = pts.slice(1, -1);
+    let best = mid, bestD = Infinity;
+    const perm = (arr, done = []) => {
+      if (!arr.length) {
+        const seq = [first, ...done, last];
+        const d = seq.slice(1).reduce((s, p, i) => s + hav(seq[i], p), 0);
+        if (d < bestD) { bestD = d; best = done; }
+        return;
+      }
+      arr.forEach((p, i) => perm([...arr.slice(0, i), ...arr.slice(i + 1)], [...done, p]));
+    };
+    perm(mid);
+    // l'ordre du texte (souvent celui de la course) est gardé s'il reste cohérent (pas plus de 35 % plus long)
+    const textD = pts.slice(1).reduce((s, p, i) => s + hav(pts[i], p), 0);
+    if (!(ordered && textD <= bestD * 1.35)) pts = [first, ...best, last];
+  }
+  // 1) le vrai trajet routier (OpenStreetMap, profil vélo), puis le relief tous les ~800 m
+  const real = await realRouteProfile(pts, km).catch(() => null);
+  if (real) { profileCache.set(key, real); return real; }
+  if (+km && pts.slice(1).reduce((s, p, i) => s + hav(pts[i], p), 0) * 1.3 < +km * .5) { const lp = { loops: true }; profileCache.set(key, lp); return lp; }
+  // 2) sinon : profil approximatif en ligne droite entre les points
   const seg = pts.slice(1).map((p, i) => hav(pts[i], p));
   const tot = seg.reduce((a, b) => a + b, 0) || 1;
   // altitudes : chaque point de passage exactement + 12 échantillons par tronçon (pour trouver les vallées)
@@ -1150,7 +1295,7 @@ async function toggleStage(i, row) {
   det.hidden = !open; row.classList.toggle("open", open);
   if (!open || det.dataset.done) return;
   const t = stageType(s.type);
-  const [from, to] = String(s.course || "").split(/\s+to\s+|\s*[–>]\s*/);
+  let [from, to] = String(s.course || "").split(/\s+to\s+|\s*[–>]\s*/);
   const route = `
     <div class="sd-route">
       <div class="sd-pt"><i class="dep"></i><small>Départ</small><b>${esc(from || "—")}</b></div>
@@ -1158,29 +1303,54 @@ async function toggleStage(i, row) {
       <div class="sd-pt"><i class="arr"></i><small>Arrivée</small><b>${esc(to || from || "—")}</b></div>
     </div>
     <div class="sd-tags">${t ? `<span class="stype ${t.c}">${esc(t.fr)}</span>` : ""}${s.date ? `<span class="sd-date">${esc(enDateFr(s.date))}</span>` : ""}</div>`;
-  det.firstElementChild.innerHTML = `<div class="sd">${route}<div class="sd-prof"></div><div class="sd-climbs">${loadingHTML("Recherche des côtes…")}</div></div>`;
-  const texts = await raceTexts(r);
+  det.firstElementChild.innerHTML = `<div class="sd">${route}<div class="sd-prof">${bikeLoaderHTML("Le coureur repère les côtes…")}</div><div class="sd-climbs"></div></div>`;
+  const [texts, fr] = await Promise.all([raceTexts(r), frStage(r, s.n).catch(() => null)]);
   const c = CyclingLive.stageClimbs(texts, s.n);
   det.dataset.done = "1";
+  // parcours absent du tableau (ex. Paris-Nice) : on le prend dans le texte de l'étape
+  const wr = c?.route;
+  if (!from && wr) {
+    from = wr.from.name; to = wr.to.name;
+    const pts = det.querySelectorAll(".sd-pt b");
+    if (pts.length === 2) { pts[0].textContent = from; pts[1].textContent = to || from; }
+    if (wr.km && !s.km) det.querySelector(".sd-line span").textContent = `${wr.km} km`;
+  }
+  const km = s.km || wr?.km;
   const box = det.querySelector(".sd-climbs");
   if (!box) return;
   // la côte d'arrivée (ex. Alpe d'Huez) passe en dernier
   const fin = keyOf(to || "");
   const isFin = k => fin && (fin.includes(keyOf(k.name)) || keyOf(k.name).includes(fin));
-  const list = [...(c?.climbs || [])].sort((x, y) => isFin(x) - isFin(y));
+  // côtes : la version française quand elle est plus complète ou donne les kilomètres, sinon l'anglaise
+  const enList = c?.climbs || [];
+  const base = fr?.climbs?.length && (fr.climbs.length >= enList.length || fr.climbs.some(x => x.km != null)) ? fr.climbs : enList;
+  const list = [...base].sort((x, y) => isFin(x) - isFin(y));
+  const summit = c?.summit || fr?.summit;
   const pbox = det.querySelector(".sd-prof");
-  if (pbox) {
-    pbox.innerHTML = loadingHTML("Dessin du profil…");
-    stageProfile(`${r.race}|${s.n}`, from, to, list, s.km)
-      .then(pr => { pbox.innerHTML = pr ? `<div class="mp-title">Profil de l'étape</div><div class="pf-wrap">${profileSVG(pr)}</div><p class="pf-note">Profil approximatif : relief réel entre le départ, les côtes et l'arrivée (le tracé exact des routes n'est pas connu). Couleurs : pente du terrain.</p>` : ""; })
+  if (pbox && fr?.img) {
+    // profil officiel de l'organisateur (Tour de France, Vuelta…)
+    pbox.innerHTML = `<div class="mp-title">Profil officiel de l'étape</div>
+      <a class="pf-official" href="${esc(fr.img)}" target="_blank" rel="noopener" title="Agrandir"><img src="${esc(fr.img)}" alt="Profil officiel de l'étape ${esc(s.n)}" loading="lazy" onerror="this.closest('.pf-official').remove()"></a>
+      <p class="pf-note">Profil officiel de l'organisateur. Touche l'image pour l'agrandir.</p>`;
+  } else if (pbox) {
+    pbox.innerHTML = bikeLoaderHTML("Le coureur reconnaît le parcours…");
+    // titres exacts des pages Wikipédia des villes quand le texte les donne (plus sûrs pour la carte)
+    stageProfile(`${r.race}|${s.n}`, wr?.from.title || from, wr?.to.title || to, list, km, base === fr?.climbs)
+      .then(pr => {
+        // la liste des côtes suit l'ordre de passage du profil
+        const ol = det.querySelector(".sd-list");
+        if (pr && ol) pr.marks.filter(m => m.kind === "climb").forEach(m => { const li = [...ol.children].find(li => li.dataset.climb === m.name); if (li) ol.appendChild(li); });
+        if (ol) [...ol.children].filter(li => li.querySelector("em")?.textContent.includes("arrivée")).forEach(li => ol.appendChild(li));
+        if (pr?.loops) { pbox.innerHTML = `<p class="hint pf-none">🗺️ Pas de profil fiable pour cette étape : son tracé (${esc(km)} km, avec des boucles ou des routes secondaires) n'est pas assez détaillé dans les sources publiques. La liste des côtes est juste en dessous.</p>`; return; }
+        pbox.innerHTML = pr ?`<div class="mp-title">Profil de l'étape</div><div class="pf-wrap">${profileSVG(pr)}</div>${pr.real ? `<div class="pf-facts"><span>📏 ${String(Math.round(pr.dist * 10) / 10).replace(".", ",")} km</span><span>⛰ ${pr.gain.toLocaleString("fr-BE")} m de dénivelé positif</span><span>🔝 ${Math.round(Math.max(...pr.curve.map(c => c.alt))).toLocaleString("fr-BE")} m au plus haut</span></div>` : ""}<p class="pf-note">${pr.real ? "Profil calculé sur l'itinéraire vélo le plus probable (OpenStreetMap) entre le départ, les côtes et l'arrivée, avec le relief réel. Il peut différer un peu du tracé officiel." : "Profil approximatif : relief réel entre le départ, les côtes et l'arrivée (l'itinéraire routier n'a pas pu être calculé)."} Couleurs : pente de la route.</p>` : `<p class="hint pf-none">🗺️ Pas de profil pour cette étape : le départ et l'arrivée n'ont pas pu être placés sur la carte.</p>`; })
       .catch(() => { pbox.innerHTML = ""; });
   }
   box.innerHTML = list.length ? `
-      <div class="mp-title">Côtes de l'étape · ${list.length}${c.summit ? ` <span class="sd-summit">⛰ Arrivée au sommet</span>` : ""}</div>
+      <div class="mp-title">Côtes de l'étape · ${list.length}${summit ? ` <span class="sd-summit">⛰ Arrivée au sommet</span>` : ""}</div>
       <ol class="sd-list">${list.map((k, j) => `
-        <li><span class="sd-cat c${esc(k.cat || "x")}" title="${esc(CAT_FR[k.cat] || "Catégorie inconnue")}">${k.cat ? esc(k.cat) : "•"}</span>
-          <b>${esc(k.name)}</b>${k.n > 1 ? `<em>×${k.n}</em>` : ""}${isFin(k) ? `<em>🏁 arrivée</em>` : ""}${k.info ? `<span class="sd-info">${esc(k.info)}</span>` : ""}</li>`).join("")}</ol>`
-    : `<p class="hint">${/flat|plat/i.test(s.type || "") ? "Étape plate : pas de grande côte au programme." : /time trial|contre/i.test(s.type || "") ? "Contre-la-montre : parcours sans côte répertoriée." : "Wikipédia ne détaille pas encore les côtes de cette étape."}${c?.summit ? " Arrivée au sommet." : ""}</p>`;
+        <li data-climb="${esc(k.name)}"><span class="sd-cat c${esc(k.cat || "x")}" title="${esc(CAT_FR[k.cat] || "Catégorie inconnue")}">${k.cat ? esc(k.cat) : "•"}</span>
+          <b>${esc(k.name)}</b>${k.n > 1 ? `<em>×${k.n}</em>` : ""}${isFin(k) ? `<em>🏁 arrivée</em>` : ""}${k.info ? `<span class="sd-info">${esc(k.info)}</span>` : ""}${k.km != null ? `<span class="sd-km">km ${String(k.km).replace(".", ",")}</span>` : ""}</li>`).join("")}</ol>`
+    : `<p class="hint">${/flat|plat/i.test(s.type || "") ? "Étape plate : pas de grande côte au programme." : /time trial|contre/i.test(s.type || "") ? "Contre-la-montre : parcours sans côte répertoriée." : "Wikipédia ne détaille pas encore les côtes de cette étape."}${summit ? " Arrivée au sommet." : ""}</p>`;
 }
 function closeRace() {
   $("#race-modal")?.classList.remove("show");

@@ -268,14 +268,98 @@
     const count = { two: 2, three: 3, four: 4, five: 5, twice: 2 };
     out.forEach(o => { const r = t.match(new RegExp(`(two|three|four|five) (?:ascents|climbs|times)[^.]{0,30}${o.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i")); if (r) o.n = Math.max(o.n, count[r[1].toLowerCase()]); });
     const summit = /summit finish|mountain-top finish|uphill finish|finish(?:ed|ing)? (?:was )?(?:located )?(?:at|on) (?:the )?(?:top|summit)|ended (?:at|on) the (?:top|summit)/i.test(t);
-    return { climbs: [...out.values()], summit, described: t.trim().length > 200 };
+    // ligne d'en-tête de l'étape : « ;23 May 2026 – [[Aosta]] to [[Pila, Aosta Valley|Pila]], {{convert|133|km}} »
+    // → parcours, distance et titres exacts des pages des villes (bien plus sûrs pour les placer sur la carte)
+    let route = null;
+    const head = (sec.match(/^;[^\n]*/m) || [""])[0];
+    const hm = head.match(/[–—-]\s*(.+?)\s+to\s+(.+?)(?:,\s*(?:\{\{convert\|([\d.]+)|([\d.]+)\s*km)|$)/);
+    if (hm) {
+      const side = x => ({ name: clean(x).replace(/\s*\(.*?\)\s*/g, " ").trim(), title: (x.match(/\[\[([^\]|#]+)/) || [])[1] || null });
+      route = { from: side(hm[1]), to: side(hm[2]), km: hm[3] || hm[4] || null };
+    }
+    return { climbs: [...out.values()], summit, described: t.trim().length > 200, route };
   }
   // pages de la course : la page principale + les pages « Stage X to Stage Y » qu'elle cite
   function stagePages(w) {
     return [...new Set((String(w || "").match(/\[\[(\d{4} [^\]|#]+, Stage \d+ to Stage \d+)/g) || []).map(x => x.slice(2)))];
   }
 
-  const api = { loadSeason, parseCalendar, parseMedals, parseStageRace, isStageRace, clean, stageClimbs, stagePages };
+
+  // ---------------------------------------------------------------- étapes en français (Wikipédia fr) : profil officiel, côtes dans l'ordre avec leur kilomètre
+  function frClean(s) {
+    s = String(s || "")
+      .replace(/<ref[^>]*\/>|<ref[\s\S]*?<\/ref>|<!--[\s\S]*?-->/g, "")
+      .replace(/\{\{(\d+)(?:re|er|e|ère)\|([^}|]*)\}\}/gi, "$1e $2")
+      .replace(/\{\{(\d+)(?:re|er|e|ère)\}\}/gi, "$1e")
+      .replace(/\{\{[Uu]nité\|([\d.,\s]+)\|([^}|]+)[^}]*\}\}/g, "$1 $2")
+      .replace(/\{\{(?:nobr|nowrap|nombre)\|([^}]*)\}\}/gi, "$1")
+      .replace(/\{\{[Hh]ors catégorie\}\}/g, "hors catégorie");
+    let prev;
+    do { prev = s; s = s.replace(/\{\{[^{}]*\}\}/g, ""); } while (s !== prev);
+    return s.replace(/\[\[(?:Fichier|File|Image):[^\]]*\]\]/gi, "").replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2").replace(/\[\[([^\]]+)\]\]/g, "$1")
+      .replace(/'''?/g, "").replace(/&nbsp;| /g, " ").replace(/<[^>]+>/g, "");
+  }
+  // section d'une étape dans la page de la course (« === 1re étape === ») ou article d'étape entier
+  function frStageSection(w, n) {
+    const lines = String(w || "").split("\n");
+    const want = n === "P" ? /prologue/i : new RegExp(`^\\s*${n}\\s*(?:re|er|e|ère)?\\s*étape\\b`, "i");
+    for (let i = 0; i < lines.length; i++) {
+      const h = lines[i].match(/^(==+)\s*(.*?)\s*\1\s*$/);
+      if (!h || !want.test(frClean(h[2]).replace(/^(\d+)e\s+/, "$1e ").replace(/^(\d+)e /, "$1 ").replace(/^(\d+)\s+/, "$1 "))) continue;
+      const lvl = h[1].length, out = [];
+      for (let k = i + 1; k < lines.length; k++) { const h2 = lines[k].match(/^(==+)[^=]/); if (h2 && h2[1].length <= lvl) break; out.push(lines[k]); }
+      return out.join("\n");
+    }
+    return null;
+  }
+  // mot-clé en minuscule ou majuscule, puis un nom propre (majuscules obligatoires : « avec » n'est pas un nom de col)
+  const FR_CLIMB = /(?:^|[^\wÀ-ž])((?:[Cc]ôte|[Cc]ol|[Mm]ur|[Cc]ime|[Cc]olle|[Pp]asso|[Aa]lto|[Pp]uerto|[Pp]ort|[Pp]lateau|(?:[Mm]ontée|[Gg]rimpée|[Aa]scension|[Gg]rimper|[Mm]onter)(?: finale)?(?: du col)?(?: vers)?)\s+(?:de la |de l'|du |des |de |d'|la |le |les |l')?[A-ZÀ-Ž][\wÀ-ž'’-]*(?:[\s-](?:de |du |des |la |le |d'|l'|di |del )?[A-ZÀ-Ž][\wÀ-ž'’-]*){0,3})/g;
+  const frKey = n => String(n).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/^(montee|grimpee|ascension|grimper|monter)( finale)?( du col| vers)?\s+/, "").replace(/^(col|cote|mur)\s+(de la|de l'|du|des|de|d')\s*/, "").replace(/[^a-z0-9]+/g, "");
+  function frClimbs(raw) {
+    const t = frClean(String(raw || "").split(/\n\{\||\n== *Résultats/)[0]);
+    const out = new Map();
+    const hits = [...t.matchAll(FR_CLIMB)];
+    hits.forEach((m, idx) => {
+      let name = m[1].trim().replace(/[\s,.;]+$/, "")
+        .replace(/^(?:[Mm]ontée|[Gg]rimpée|[Aa]scension)(?: finale)? du col/, "Col")
+        .replace(/^(?:[Gg]rimper|[Mm]onter|[Mm]ontée|[Gg]rimpée|[Aa]scension)(?: finale)? vers (?:la |le |les |l')?/, "Montée vers ");
+      name = name[0].toUpperCase() + name.slice(1);
+      if (/^(Col|Côte|Montée|Mur)\s+(?:de|du|des|vers)?\s*$/i.test(name)) return;
+      const end = m.index + m[0].length, next = hits[idx + 1]?.index ?? t.length;
+      const after = t.slice(end, Math.min(next, end + 160)), before = t.slice(Math.max(0, m.index - 70), m.index);
+      const cat = (after.match(/hors catégorie|(\d)e catégorie/i) || before.match(/(?:hors catégorie|(\d)e catégorie)[^.]{0,25}$/i) || [])[0];
+      const info = (after.match(/^\s*\(([\d.,\s]+(?:km|m)\s+à\s+[\d.,]+\s*%)/) || [])[1];
+      const kmm = after.match(/(?:au|\(|sommet[^.]{0,40}?)\s*km\s+(\d+(?:[.,]\d+)?)/);
+      const k = frKey(name);
+      if (!k) return;
+      const o = out.get(k) || { name, cat: null, info: null, km: null, n: 1 };
+      if (!o.cat && cat) o.cat = /hors/i.test(cat) ? "HC" : cat.match(/\d/)[0];
+      if (!o.info && info) o.info = info.replace(/\s+/g, " ").replace(/(\d)\.(\d)/g, "$1,$2").trim();
+      if (o.km == null && kmm) o.km = +kmm[1].replace(",", ".");
+      out.set(k, o);
+    });
+    // si on connaît le kilomètre des côtes, on les remet dans l'ordre de la course
+    const list = [...out.values()];
+    return list.every(c => c.km != null) ? list.sort((a, b) => a.km - b.km) : list;
+  }
+  function frStageInfo(texts, n) {
+    for (const w of texts) {
+      const sec = frStageSection(w, n) || (texts.indexOf(w) > 0 ? w : null);   // l'article d'étape entier
+      if (!sec) continue;
+      const img = (sec.match(/\[(https?:\/\/[^\s\]]+)\s+Profil[^\]]*\]/i) || [])[1] || null;
+      const climbs = frClimbs(sec);
+      const summit = /arrivée (?:au sommet|en altitude|en côte)|ascension finale|montée finale/i.test(frClean(sec));
+      if (img || climbs.length) return { img, climbs, summit };
+    }
+    return null;
+  }
+  // titres des articles d'étape cités par la page de la course (« [[14e étape du Tour d'Italie 2026|…]] »)
+  function frStageTitle(w, n) {
+    const re = n === "P" ? /\[\[(Prologue[^\]|]*)/i : new RegExp(`\\[\\[(${n}(?:re|e|er) étape [^\\]|]+)`, "i");
+    return (String(w || "").match(re) || [])[1] || null;
+  }
+
+  const api = { loadSeason, parseCalendar, parseMedals, parseStageRace, isStageRace, clean, stageClimbs, stagePages, frStageInfo, frStageTitle, frClimbs, frStageSection };
   root.CyclingLive = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);
