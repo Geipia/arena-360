@@ -1395,3 +1395,81 @@ table.std { width: 100%; border-collapse: collapse; font-variant-numeric: tabula
 
 .ts-table tr.me td { background: transparent; }
 .ts-table tr.me { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), transparent 80%); }
+
+/* profil d'étape */
+.pf-wrap { overflow-x: auto; border-radius: 12px; background: linear-gradient(180deg, #121a3a, #0b1024); border: 1px solid var(--line); padding: 6px 4px 0; }
+.pf-svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.pf-grid { stroke: rgba(255,255,255,.08); }
+.pf-ax { font: 600 10px var(--body); fill: #8d93ad; }
+.pf-name { font: 800 11px var(--body); fill: #fff; }
+.pf-alt { font: 700 9.5px var(--body); fill: #ffd21f; }
+.pf-note { margin: 6px 2px 0; font-size: 11px; color: var(--dim); }
+.sd-prof .loading { padding: 18px; background: transparent; border: 0; }
+
+/* bloc « En direct » de l'accueil */
+.live-block { border-color: rgba(255,59,79,.45); box-shadow: 0 0 0 1px rgba(255,59,79,.15), 0 14px 40px rgba(255,59,79,.14); }
+.live-block::before { background: linear-gradient(90deg, var(--live), #ff8a3d 50%, transparent); opacity: 1; height: 3px; }
+.live-head { background: linear-gradient(90deg, rgba(255,59,79,.28), rgba(255,138,61,.08) 60%, transparent) !important; color: #fff; }
+.live-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 0 rgba(255,59,79,.7); animation: live-ring 1.4s infinite; }
+@keyframes live-ring { 70% { box-shadow: 0 0 0 9px rgba(255,59,79,0); } 100% { box-shadow: 0 0 0 0 rgba(255,59,79,0); } }
+.live-comp { display: flex; align-items: center; gap: 6px; padding: 8px 16px 0; font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+.live-comp img, .live-comp .flag { width: 16px; height: 16px; object-fit: contain; }
+.live-block .match { border-bottom: 1px solid var(--line); }
+
+/* ===================================================================== */
+/* ===== Thème plus clair et plus coloré (nov. 2026) ===== */
+:root {
+  --bg: #0f1734;
+  --bg-2: #142049;
+  --panel: #1a2754;
+  --panel-2: #213166;
+  --line: #2f4282;
+  --text: #f6f8ff;
+  --muted: #b0b9e0;
+  --dim: #8592c4;
+  --accent-soft: rgba(56, 214, 255, .18);
+  --green: #3ddc84;
+  --orange: #ff8a3d;
+  --violet: #9b7bff;
+}
+body {
+  background:
+    radial-gradient(900px 520px at 0% -10%, rgba(56,214,255,.28), transparent 65%),
+    radial-gradient(800px 520px at 100% -5%, rgba(255,79,139,.22), transparent 65%),
+    radial-gradient(900px 600px at 50% 110%, rgba(155,123,255,.20), transparent 65%),
+    radial-gradient(600px 400px at 85% 55%, rgba(255,210,31,.08), transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
+}
+body::before { opacity: .04; }
+.topbar { background: linear-gradient(90deg, rgba(20,32,73,.92), rgba(28,22,70,.92)); border-bottom: 0; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+.topbar::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, var(--foot), var(--velo), var(--jeu), var(--violet)); }
+.sidebar { background: rgba(20,32,73,.65) !important; }
+.comp-block, .table-wrap, .stat, .empty, .loading, .mpanel, .leaders, .nations, .auth-card {
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.015) 45%), var(--panel);
+}
+.comp-head { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 26%, var(--panel-2)), var(--panel-2) 70%); }
+.match:nth-child(even) { background: rgba(255,255,255,.025); }
+.score .box { background: #0d1531; border-color: var(--line); }
+/* chiffres du jour : une couleur par case */
+.summary-row .stat:nth-child(1) b { color: var(--foot); }
+.summary-row .stat:nth-child(3) b { color: var(--green); }
+.summary-row .stat:nth-child(4) b { color: var(--velo); }
+.summary-row .stat:nth-child(5) b { color: var(--violet); }
+.summary-row .stat:nth-child(1) { background: linear-gradient(140deg, rgba(56,214,255,.22), var(--panel) 60%); }
+.summary-row .stat:nth-child(2) { background: linear-gradient(140deg, rgba(255,59,79,.22), var(--panel) 60%); }
+.summary-row .stat:nth-child(3) { background: linear-gradient(140deg, rgba(61,220,132,.2), var(--panel) 60%); }
+.summary-row .stat:nth-child(4) { background: linear-gradient(140deg, rgba(255,210,31,.2), var(--panel) 60%); }
+.summary-row .stat:nth-child(5) { background: linear-gradient(140deg, rgba(155,123,255,.24), var(--panel) 60%); }
+.summary-row .stat:nth-child(1)::after { background: var(--foot); } .summary-row .stat:nth-child(2)::after { background: var(--live); }
+.summary-row .stat:nth-child(3)::after { background: var(--green); } .summary-row .stat:nth-child(4)::after { background: var(--velo); }
+.summary-row .stat:nth-child(5)::after { background: var(--violet); }
+.stat::after { opacity: .18 !important; }
+/* titres en dégradé */
+.page-head h1 { background: linear-gradient(90deg, #fff 20%, color-mix(in srgb, var(--accent) 80%, #fff)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* barre latérale : petites pastilles colorées */
+.league-item.active { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), transparent); }
+.modal-card { background: #16224b; }
+.modal { background: rgba(8, 12, 32, .65); }
+.std tbody tr:nth-child(even) td, .race-table tbody tr:nth-child(even) td { background: rgba(255,255,255,.025); }
+#splash { background: radial-gradient(600px 340px at 50% 42%, rgba(56,214,255,.22), transparent 70%), radial-gradient(500px 300px at 70% 70%, rgba(255,79,139,.18), transparent 70%), #0f1734; }

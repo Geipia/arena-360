@@ -391,7 +391,7 @@ async function renderToday(silent = false) {
     : getJSON(`${API}/${o.slug}/scoreboard?dates=${key}`, isToday ? 30000 : 300000));
   if (state.view !== "today" || ymd(state.day) !== key) return;
 
-  const blocks = [];
+  const blocks = [], liveList = [];
   let total = 0, live = 0, done = 0, goals = 0;
   order.forEach((o, i) => {
     const data = results[i];
@@ -406,7 +406,7 @@ async function renderToday(silent = false) {
     ms.sort((a, b) => a.date - b.date);
     total += ms.length;
     ms.forEach(m => {
-      if (m.state === "in") live++;
+      if (m.state === "in") { live++; liveList.push({ m, l: o.l, name: o.i ? o.name : null }); }
       if (m.state === "post") done++;
       if (m.state !== "pre") goals += (+m.home.score || 0) + (+m.away.score || 0);
     });
@@ -421,9 +421,20 @@ async function renderToday(silent = false) {
       <div class="stat"><b>${done}</b><span>terminés</span></div>
       <div class="stat"><b>${goals}</b><span>buts marqués</span></div>
       <div class="stat"><b>${blocks.length}</b><span>compétitions</span></div>
-    </div>${blocks.join("")}`
+    </div>${liveBlock(liveList)}${blocks.join("")}`
     : `<div class="empty">Aucun match ce jour-là dans les compétitions suivies.<br>Utilise les flèches pour changer de date.</div>`;
   if (isToday) refreshTimer = setTimeout(() => renderToday(true), live ? 30000 : 120000);
+}
+
+/* tous les matchs en direct, toutes compétitions, tout en haut */
+function liveBlock(list) {
+  if (!list.length) return "";
+  return `
+    <div class="comp-block live-block">
+      <div class="comp-head live-head"><span class="live-dot"></span><span>En direct</span><span class="cnt">${list.length} match${list.length > 1 ? "s" : ""}</span></div>
+      <div class="matches">${list.map(({ m, l, name }) => `
+        <div class="live-comp">${state.logos[l.s] ? `<img src="${state.logos[l.s]}" alt="">` : l.f ? flagImg(l.f) : ""}${esc(l.c)} · ${esc(l.n)}${name ? ` · ${esc(name)}` : ""}</div>${matchHTML(m)}`).join("")}</div>
+    </div>`;
 }
 
 function compBlock(l, ms, data, subName, subIdx = 0) {
@@ -1007,6 +1018,129 @@ async function raceTexts(r) {
   raceTextCache.set(title, p);
   return p;
 }
+/* profil d'une étape : relief réel (Open-Meteo) le long du trajet départ → côtes → arrivée (positions Wikipédia).
+   Le tracé exact des routes n'est pas connu : c'est un profil approximatif, mais les sommets et leur altitude sont réels. */
+const WIKI_Q = "https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&origin=*&redirects=1&prop=coordinates&colimit=50";
+async function placeCoords(names) {
+  const out = new Map();
+  const d = await getJSON(`${WIKI_Q}&titles=${encodeURIComponent(names.join("|"))}`, 30 * 864e5).catch(() => null);
+  const norm = new Map((d?.query?.normalized || []).map(n => [n.to, n.from]));
+  const redir = new Map((d?.query?.redirects || []).map(n => [n.to, n.from]));
+  (d?.query?.pages || []).forEach(p => {
+    if (!p.coordinates) return;
+    let t = p.title; t = redir.get(t) || t; t = norm.get(t) || t;
+    out.set(t, { lat: p.coordinates[0].lat, lon: p.coordinates[0].lon });
+  });
+  // noms sans page exacte : on cherche la page la plus proche qui a des coordonnées
+  await pool(names.filter(n => !out.has(n)).slice(0, 6), 3, async n => {
+    const s = await getJSON(`${WIKI_Q}&generator=search&gsrlimit=3&gsrsearch=${encodeURIComponent(n)}`, 30 * 864e5).catch(() => null);
+    // le titre trouvé doit contenir le mot distinctif du nom (sinon « Col du Télégraphe » tomberait sur le Galibier voisin)
+    const words = keyOf(n).split(" ").filter(w => w.length > 3 && !/^(cote|colle|monte|montee|passo|alto|puerto|plateau)$/.test(w));
+    const p = (s?.query?.pages || []).sort((a, b) => a.index - b.index).find(p => p.coordinates && words.length && words.every(w => keyOf(p.title).includes(w)));
+    if (p) out.set(n, { lat: p.coordinates[0].lat, lon: p.coordinates[0].lon });
+  });
+  // dernier recours : la carte OpenStreetMap (cols et villages sans page Wikipédia), une recherche par seconde
+  for (const n of names.filter(n => !out.has(n)).slice(0, 5)) {
+    const r = await getJSON(`https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=fr&q=${encodeURIComponent(n)}`, 30 * 864e5).catch(() => null);
+    if (r?.[0]) out.set(n, { lat: +r[0].lat, lon: +r[0].lon });
+    await new Promise(res => setTimeout(res, 1000));
+  }
+  return out;
+}
+const hav = (a, b) => { const R = 6371, r = x => x * Math.PI / 180; const dl = r(b.lat - a.lat), dn = r(b.lon - a.lon); const h = Math.sin(dl / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dn / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+const profileCache = new Map();
+async function stageProfile(key, from, to, climbs, km) {
+  if (profileCache.has(key)) return profileCache.get(key);
+  const place = n => String(n || "").replace(/\s*\(.*?\)\s*/g, " ").trim();
+  const stops = [{ name: place(from), kind: "dep" }, ...climbs.map(c => ({ name: c.name, kind: "climb", cat: c.cat, info: c.info })), { name: place(to || from), kind: "arr" }]
+    .filter((s, i, a) => s.name && !(i && s.name === a[i - 1].name));
+  const co = await placeCoords([...new Set(stops.map(s => s.name))]);
+  let pts = stops.map(s => ({ ...s, ...co.get(s.name) })).filter(s => s.lat != null);
+  if (pts.length > 2) { const c = pts[0]; pts = pts.filter(p => hav(c, p) < 600); }   // homonyme à l'autre bout du monde
+  if (pts.length < 2) { profileCache.set(key, null); return null; }
+  const seg = pts.slice(1).map((p, i) => hav(pts[i], p));
+  const tot = seg.reduce((a, b) => a + b, 0) || 1;
+  // altitudes : chaque point de passage exactement + 12 échantillons par tronçon (pour trouver les vallées)
+  const K = Math.max(4, Math.min(12, Math.floor((99 - pts.length) / Math.max(1, seg.length))));
+  const q = pts.map(p => ({ lat: p.lat, lon: p.lon }));
+  seg.forEach((_, i) => { for (let k = 1; k <= K; k++) { const f = k / (K + 1); q.push({ lat: pts[i].lat + (pts[i + 1].lat - pts[i].lat) * f, lon: pts[i].lon + (pts[i + 1].lon - pts[i].lon) * f, seg: i, f }); } });
+  const el = await getJSON(`https://api.open-meteo.com/v1/elevation?latitude=${q.map(s => s.lat.toFixed(4)).join(",")}&longitude=${q.map(s => s.lon.toFixed(4)).join(",")}`, 30 * 864e5).catch(() => null);
+  if (!el?.elevation?.length) { profileCache.set(key, null); return null; }
+  const dist = +String(km || "").replace(",", ".") || tot;
+  const sc = dist / tot;
+  let acc = 0;
+  const marks = pts.map((p, i) => { if (i) acc += seg[i - 1]; return { ...p, x: acc * sc, alt: Math.max(0, el.elevation[i]) }; });
+  // sommets du profil : points de passage, et entre deux, la vallée (ou le pied de la côte s'il est connu)
+  const nodes = [{ x: marks[0].x, alt: marks[0].alt }];
+  for (let i = 0; i < seg.length; i++) {
+    const a = marks[i], b = marks[i + 1];
+    const inner = q.map((s, j) => ({ ...s, alt: el.elevation[j] })).filter(s => s.seg === i);
+    const lowS = inner.reduce((m, s) => s.alt < m.alt ? s : m, { alt: Infinity });
+    const foot = b.kind === "climb" && String(b.info || "").match(/([\d,]+)\s*km à ([\d,]+)\s*%/);
+    if (foot) {
+      const len = +foot[1].replace(",", "."), grad = +foot[2].replace(",", ".");
+      const fx = b.x - len, falt = b.alt - len * 10 * grad;
+      // descente vers la vallée avant le pied de la côte, si elle est plus basse
+      if (lowS.alt < Math.min(a.alt, falt) - 60 && fx - a.x > 8) nodes.push({ x: a.x + (fx - a.x) * .55, alt: Math.max(0, lowS.alt) });
+      if (fx > a.x + 1) nodes.push({ x: fx, alt: Math.max(0, falt) });
+    } else if (lowS.alt < Math.min(a.alt, b.alt) - 60) {
+      nodes.push({ x: a.x + (b.x - a.x) * lowS.f, alt: Math.max(0, lowS.alt) });
+    }
+    nodes.push({ x: b.x, alt: b.alt });
+  }
+  // courbe douce entre les sommets (montées et descentes en « S », comme sur les profils officiels)
+  const curve = [];
+  for (let i = 0; i < nodes.length - 1; i++) {
+    const a = nodes[i], b = nodes[i + 1], steps = Math.max(2, Math.ceil((b.x - a.x) / 1.5));
+    for (let k = 0; k < steps; k++) { const f = k / steps, e = (1 - Math.cos(Math.PI * f)) / 2; curve.push({ x: a.x + (b.x - a.x) * f, alt: a.alt + (b.alt - a.alt) * e }); }
+  }
+  curve.push(nodes[nodes.length - 1]);
+  const prof = { dist, curve, marks };
+  profileCache.set(key, prof);
+  return prof;
+}
+function profileSVG(p) {
+  const W = 720, H = 236, L = 44, R = 12, T = 58, B = 26;
+  const alts = p.curve.map(c => c.alt);
+  const max = Math.max(...alts), min = Math.min(...alts);
+  const span = Math.max(300, max - min);
+  const step = span > 1500 ? 500 : span > 600 ? 250 : 100;
+  const top = Math.ceil((max + step * .4) / step) * step, bot = Math.max(0, Math.floor((min - step * .3) / step) * step);
+  const x = d => L + d / p.dist * (W - L - R), y = a => T + (1 - (a - bot) / (top - bot)) * (H - T - B);
+  // pente de chaque petit tronçon → couleur (vert, jaune, orange, rouge, comme les profils officiels)
+  const bands = p.curve.slice(1).map((c, i) => {
+    const a = p.curve[i], dx = (c.x - a.x) * 1000, g = dx > 0 ? (c.alt - a.alt) / dx * 100 : 0;
+    const col = g > 8 ? "#ff3b4f" : g > 6 ? "#ff8a3d" : g > 4 ? "#ffd21f" : g > 1.5 ? "#7be0a0" : "#4fc3f7";
+    return `<path d="M${x(a.x).toFixed(1)},${y(a.alt).toFixed(1)} L${x(c.x).toFixed(1)},${y(c.alt).toFixed(1)} L${x(c.x).toFixed(1)},${H - B} L${x(a.x).toFixed(1)},${H - B}Z" fill="${col}" stroke="${col}" stroke-width=".6"/>`;
+  }).join("");
+  const line = p.curve.map(c => `${x(c.x).toFixed(1)},${y(c.alt).toFixed(1)}`).join(" ");
+  const grid = []; for (let a = bot; a <= top; a += step) grid.push(a);
+  const kmStep = p.dist > 150 ? 50 : p.dist > 60 ? 25 : 10;
+  const kms = []; for (let k = 0; k <= p.dist; k += kmStep) kms.push(k);
+  const CATC = { HC: "#ff3b4f", 1: "#ff8a3d", 2: "#ffd21f", 3: "#3ddc84", 4: "#7fb4ff" };
+  let prevX = -1e9, row = 0;
+  const marks = p.marks.map(m => {
+    const mx = x(m.x), my = y(m.alt);
+    row = mx - prevX < 110 ? 1 - row : 0; prevX = mx;
+    const ty = T - 18 - row * 24;
+    const lbl = m.kind === "climb" ? m.name.replace(/^(Côte|Col|Colle|Passo|Alto|Puerto|Montée)\s+(de la |de l'|du |des |de |d')?/, "") : m.kind === "dep" ? "Départ" : "Arrivée";
+    const anchor = mx < L + 60 ? "start" : mx > W - 70 ? "end" : "middle";
+    return `<g>
+      <line x1="${mx}" y1="${my}" x2="${mx}" y2="${ty + 14}" stroke="rgba(255,255,255,.35)" stroke-dasharray="2 3"/>
+      <circle cx="${mx}" cy="${my}" r="4.5" fill="${m.kind === "climb" ? CATC[m.cat] || "#fff" : m.kind === "arr" ? "#ffd21f" : "#3ddc84"}" stroke="#0b1024" stroke-width="2"/>
+      <text x="${mx}" y="${ty}" text-anchor="${anchor}" class="pf-name">${esc(lbl)}</text>
+      <text x="${mx}" y="${ty + 10}" text-anchor="${anchor}" class="pf-alt">${Math.round(m.alt)} m${m.cat ? ` · ${m.cat === "HC" ? "HC" : m.cat + "e cat."}` : ""}</text>
+    </g>`;
+  }).join("");
+  return `<svg class="pf-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Profil de l'étape">
+    ${grid.map(a => `<line x1="${L}" x2="${W - R}" y1="${y(a)}" y2="${y(a)}" class="pf-grid"/><text x="${L - 6}" y="${y(a) + 4}" text-anchor="end" class="pf-ax">${a}</text>`).join("")}
+    ${bands}
+    <polyline points="${line}" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/>
+    ${kms.map(k => `<text x="${x(k)}" y="${H - 8}" text-anchor="middle" class="pf-ax">${k} km</text>`).join("")}
+    ${marks}
+  </svg>`;
+}
+
 const CAT_FR = { HC: "Hors catégorie", 1: "1re catégorie", 2: "2e catégorie", 3: "3e catégorie", 4: "4e catégorie" };
 async function toggleStage(i, row) {
   const r = raceOpen, s = r?.stages[i];
@@ -1024,7 +1158,7 @@ async function toggleStage(i, row) {
       <div class="sd-pt"><i class="arr"></i><small>Arrivée</small><b>${esc(to || from || "—")}</b></div>
     </div>
     <div class="sd-tags">${t ? `<span class="stype ${t.c}">${esc(t.fr)}</span>` : ""}${s.date ? `<span class="sd-date">${esc(enDateFr(s.date))}</span>` : ""}</div>`;
-  det.firstElementChild.innerHTML = `<div class="sd">${route}<div class="sd-climbs">${loadingHTML("Recherche des côtes…")}</div></div>`;
+  det.firstElementChild.innerHTML = `<div class="sd">${route}<div class="sd-prof"></div><div class="sd-climbs">${loadingHTML("Recherche des côtes…")}</div></div>`;
   const texts = await raceTexts(r);
   const c = CyclingLive.stageClimbs(texts, s.n);
   det.dataset.done = "1";
@@ -1034,6 +1168,13 @@ async function toggleStage(i, row) {
   const fin = keyOf(to || "");
   const isFin = k => fin && (fin.includes(keyOf(k.name)) || keyOf(k.name).includes(fin));
   const list = [...(c?.climbs || [])].sort((x, y) => isFin(x) - isFin(y));
+  const pbox = det.querySelector(".sd-prof");
+  if (pbox) {
+    pbox.innerHTML = loadingHTML("Dessin du profil…");
+    stageProfile(`${r.race}|${s.n}`, from, to, list, s.km)
+      .then(pr => { pbox.innerHTML = pr ? `<div class="mp-title">Profil de l'étape</div><div class="pf-wrap">${profileSVG(pr)}</div><p class="pf-note">Profil approximatif : relief réel entre le départ, les côtes et l'arrivée (le tracé exact des routes n'est pas connu). Couleurs : pente du terrain.</p>` : ""; })
+      .catch(() => { pbox.innerHTML = ""; });
+  }
   box.innerHTML = list.length ? `
       <div class="mp-title">Côtes de l'étape · ${list.length}${c.summit ? ` <span class="sd-summit">⛰ Arrivée au sommet</span>` : ""}</div>
       <ol class="sd-list">${list.map((k, j) => `
