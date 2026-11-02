@@ -56,7 +56,7 @@ Tant que ce n'est pas fait, l'onglet « Groupes » affiche que les groupes ne so
 
 ## Bon à savoir
 
-- Les coureurs du marché viennent de `cycling-riders.json` (effectifs World Tour et ProTeam, avec dates de naissance) : `node tools/build-riders.mjs` le met à jour. Les résultats des saisons passées sont dans `cycling-history.json` : `node tools/build-cycling-history.mjs 2025 2024 2023 2022 2021 2020`.
+- Les coureurs du marché viennent de `cycling-riders.json` (effectifs World Tour et ProTeam, avec dates de naissance) : `node tools/build-riders.mjs` le met à jour. Les résultats des saisons passées sont dans `cycling-history.json` : `node tools/build-cycling-history.mjs 2026 2025 2024 2023 2022 2021 2020` (avec les tops 10 de chaque course et de chaque étape, lus sur Wikipédia).
 
 - Les dates (fin des inscriptions le 19 janvier 2027, fenêtres de transferts) sont dans `config.js` **et** dans `supabase-setup.sql`. Si tu les changes, change-les aux deux endroits, puis relance le script SQL.
 - Les résultats 2027 sont lus automatiquement sur Wikipédia (pages « 2027 UCI World Tour », « 2027 UCI ProSeries », « 2027 UCI Europe Tour », Mondiaux et championnats d'Europe). Chaque appli recalcule les points toutes les 3 heures, ou tout de suite avec le bouton **Mettre à jour** du classement.

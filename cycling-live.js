@@ -176,6 +176,60 @@
     return { stages: st, jerseys: ld.jerseys };
   }
 
+  const normName = n => String(n || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z]+/g, " ").trim();
+  // ---------------------------------------------------------------- tableaux de résultats (top 10) : {{cyclingresult start|title=…}} … {{cyclingresult end}}
+  // Renvoie { top, stages: { n: top }, cls: { Points: top, … } } ; un « top » est [{ name, nat }] du 1er au 10e.
+  function resultTables(w) {
+    const out = { top: null, stages: {}, cls: {} };
+    const gcAfter = {};
+    for (const m of String(w || "").matchAll(/\{\{\s*cycling ?result start\s*\|([\s\S]*?)\{\{\s*cycling ?result end\s*\}\}/gi)) {
+      const block = m[1];
+      const title = clean((block.match(/title\s*=\s*([^\n]*?)(?:<ref|\}\}\s*\n|\n)/i) || [])[1] || "");
+      if (/team/i.test(title)) continue;
+      const top = [];
+      for (const row of block.matchAll(/\{\{\s*cycling ?result\s*\|\s*(\d{1,2})\s*\|([^\n]*)/gi)) {
+        const pos = +row[1];
+        const cells = row[2].split("|");
+        const link = row[2].match(/\[\[([^\]]+)\]\]/);
+        const name = link ? link[1].split("|").pop().trim() : clean(cells[0]);
+        const n3 = row[2].match(/\]\]\s*\|\s*([A-Z]{3})\s*\|/);
+        if (name && pos >= 1 && pos <= 10 && !top[pos - 1]) top[pos - 1] = { name, nat: n3 ? nat(n3[1]) : null };
+      }
+      const list = top.filter(Boolean);
+      if (list.length < 3) continue;
+      const st = title.match(/^(?:Stage\s+(\d{1,2}[ab]?)|(Prologue))\b/i);
+      const after = title.match(/after\s+(?:Stage\s+(\d{1,2}[ab]?)|(Prologue))/i);
+      if (/general classification/i.test(title)) {
+        if (after) gcAfter[after[1] || "P"] = list; else out.top = list;
+      } else if (st && !/classification/i.test(title)) out.stages[st[1] || "P"] = list;
+      else if (!after && /points/i.test(title)) out.cls.Points = list;
+      else if (!after && /mountain|climb/i.test(title)) out.cls.Montagne = list;
+      else if (!after && /young/i.test(title)) out.cls.Jeune = list;
+      else if (!after && !st && /result/i.test(title) && !out.top) out.top = list;   // course d'un jour
+    }
+    out.gcAfter = gcAfter;
+    return out;
+  }
+  // ajoute les tops 10 lus dans les pages d'une course (r.top, r.stages[i].top, r.cls)
+  function applyResults(r, pages) {
+    const res = { top: null, stages: {}, cls: {}, gcAfter: {} };
+    for (const w of pages) {
+      const x = resultTables(w);
+      if (x.top) res.top = x.top;
+      Object.assign(res.stages, x.stages); Object.assign(res.cls, x.cls); Object.assign(res.gcAfter, x.gcAfter);
+    }
+    // pas de classement final publié : le général après la dernière étape, si la course est finie
+    if (!res.top && r.stages && r.winner) {
+      const last = r.stages[r.stages.length - 1]?.n;
+      if (last && res.gcAfter[last]) res.top = res.gcAfter[last];
+    }
+    const same = (a, b) => normName(a) === normName(b);
+    if (res.top && r.winner && !same(res.top[0].name, r.winner.name)) res.top = null;   // tableau qui ne correspond pas au vainqueur : ignoré
+    if (res.top) r.top = res.top;
+    if (r.stages) r.stages.forEach(s => { const t = res.stages[s.n]; if (t && (!s.winner || s.winner.team || same(t[0].name, s.winner.name))) s.top = t; });
+    if (Object.keys(res.cls).length) r.cls = res.cls;
+  }
+
   const isStageRace = r => /\d\s*[–-]\s*\d|[a-z]\s*[–-]\s*\d/.test(r.date || "");
 
   // ---------------------------------------------------------------- chargement d'une saison complète
@@ -202,7 +256,9 @@
       loadedAt: new Date().toISOString(),
     };
     // étapes : courses à étapes World Tour et ProSeries déjà commencées (avec un vainqueur ou en cours)
-    const todo = [...D.worldtour, ...D.proseries].filter(r => isStageRace(r) && r.status !== "Annulée" && (r.page || r.race));
+    // + courses d'un jour World Tour et ProSeries terminées (pour leur top 10)
+    const todo = [...D.worldtour, ...D.proseries].filter(r => r.status !== "Annulée" && (r.page || r.race) && (isStageRace(r) || (opts.results !== false && r.winner)));
+    todo.forEach(r => { if (!isStageRace(r)) r._oneDay = true; });
     let done = 0;
     const conc = opts.concurrency || 4;
     let idx = 0;
@@ -210,12 +266,22 @@
       while (idx < todo.length) {
         const r = todo[idx++];
         if (opts.skipStage && opts.skipStage(r)) { done++; continue; }
-        const w = (r.page && await get(r.page)) || await get(`${year} ${r.race}`);
-        if (w) {
-          const s = parseStageRace(w);
-          if (s.stages) r.stages = s.stages;
-          if (s.jerseys) r.jerseys = s.jerseys;
+        {
+          const w = (r.page && await get(r.page)) || await get(`${year} ${r.race}`);
+          if (w && !r._oneDay) {
+            const s = parseStageRace(w);
+            if (s.stages) r.stages = s.stages;
+            if (s.jerseys) r.jerseys = s.jerseys;
+            // tops 10 : page de la course + pages « Stage X to Stage Y » des grands tours
+            const subs = await Promise.all(stagePages(w).map(get));
+            applyResults(r, [w, ...subs.filter(Boolean)]);
+          } else if (w) {
+            let pages = [w];
+            if (!resultTables(w).top) { const men = await get(`${r.page || year + " " + r.race} (men's race)`); if (men) pages = [men]; }
+            applyResults(r, pages);
+          }
         }
+        delete r._oneDay;
         progress(++done, todo.length);
       }
     }));
@@ -359,7 +425,7 @@
     return (String(w || "").match(re) || [])[1] || null;
   }
 
-  const api = { loadSeason, parseCalendar, parseMedals, parseStageRace, isStageRace, clean, stageClimbs, stagePages, frStageInfo, frStageTitle, frClimbs, frStageSection };
+  const api = { loadSeason, parseCalendar, parseMedals, parseStageRace, resultTables, applyResults, isStageRace, clean, stageClimbs, stagePages, frStageInfo, frStageTitle, frClimbs, frStageSection };
   root.CyclingLive = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

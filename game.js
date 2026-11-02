@@ -14,22 +14,29 @@ const SEASON_START = new Date(YEAR, 0, 1);
 const ONLINE = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
 
 // ---------------------------------------------------------------- barème
+/* Points du 1er au 10e (les tops 10 publiés sur Wikipédia). Sans top 10, on compte le podium ou le vainqueur. */
 const BAREME = {
-  gt: { label: "Grands Tours (Giro, Tour, Vuelta)", gc: [150, 90, 60], stage: 20, jerseys: { Points: 40, Montagne: 40, Jeune: 20 } },
-  monument: { label: "Monuments (Milan-San Remo, Flandres, Roubaix, Liège, Lombardie)", podium: [100, 60, 40] },
-  wtOne: { label: "Autres classiques World Tour", podium: [60, 35, 20] },
-  wtStage: { label: "Autres courses à étapes World Tour", gc: [70, 40, 25], stage: 10, jerseys: { Points: 15, Montagne: 15 } },
-  pro: { label: "UCI ProSeries", win: 30, stage: 5 },
-  e1: { label: "Europe Tour .1 (1.1 / 2.1)", win: 15 },
-  e2: { label: "Europe Tour .2 (1.2 / 2.2)", win: 8 },
-  e2u: { label: "Courses espoirs (1.2U / 2.2U)", win: 4 },
-  worldsRR: { label: "Championnat du monde — course en ligne", podium: [120, 70, 45] },
-  worldsTT: { label: "Championnat du monde — contre-la-montre", podium: [60, 35, 20] },
-  euroRR: { label: "Championnat d'Europe — course en ligne", podium: [50, 30, 15] },
-  euroTT: { label: "Championnat d'Europe — contre-la-montre", podium: [30, 18, 10] },
+  gt: { label: "Grands Tours : classement général", top: [400, 300, 230, 180, 150, 125, 105, 90, 75, 60] },
+  gtStage: { label: "Grands Tours : étape", top: [80, 55, 40, 30, 24, 19, 15, 12, 9, 7] },
+  gtJersey: { label: "Grands Tours : maillot final", jerseys: { Points: 120, Montagne: 120, Jeune: 60 } },
+  monument: { label: "Monuments (Milan-San Remo, Flandres, Roubaix, Liège, Lombardie)", top: [250, 180, 140, 110, 90, 75, 62, 50, 40, 32] },
+  wtStage: { label: "Courses à étapes World Tour : général", top: [200, 150, 115, 90, 75, 62, 50, 40, 32, 25] },
+  wtOne: { label: "Classiques World Tour", top: [150, 110, 85, 66, 54, 44, 36, 29, 23, 18] },
+  wtStageDay: { label: "Courses à étapes World Tour : étape", top: [40, 28, 20, 15, 12, 9, 7, 6, 5, 4] },
+  wtJersey: { label: "Courses à étapes World Tour : maillot final", jerseys: { Points: 40, Montagne: 40, Jeune: 20 } },
+  pro: { label: "UCI ProSeries (course d'un jour ou général)", top: [80, 55, 40, 30, 24, 19, 15, 12, 9, 7] },
+  proStage: { label: "UCI ProSeries : étape", top: [15, 10, 7, 5, 4, 3, 2, 2, 1, 1] },
+  e1: { label: "Europe Tour .1 (1.1 / 2.1) : victoire", top: [30] },
+  e2: { label: "Europe Tour .2 (1.2 / 2.2) : victoire", top: [15] },
+  e2u: { label: "Courses espoirs (1.2U / 2.2U) : victoire", top: [8] },
+  worldsRR: { label: "Championnat du monde : course en ligne", top: [250, 180, 140] },
+  worldsTT: { label: "Championnat du monde : contre-la-montre", top: [150, 100, 70] },
+  euroRR: { label: "Championnat d'Europe : course en ligne", top: [120, 85, 60] },
+  euroTT: { label: "Championnat d'Europe : contre-la-montre", top: [60, 40, 28] },
 };
 const GT_NAMES = ["Giro d'Italia", "Tour de France", "Vuelta a España"];
 const MON_NAMES = ["Milan–San Remo", "Tour of Flanders", "Paris–Roubaix", "Liège–Bastogne–Liège", "Il Lombardia"];
+const ordinal = p => p === 1 ? "1er" : p + "e";
 
 // copie indépendante des données (sans la version préparée par l'onglet Cyclisme, qui pointe sur elle-même)
 const cloneData = D => JSON.parse(JSON.stringify(D, (k, v) => (k === "__prepped" || k === "range") ? undefined : v));
@@ -41,41 +48,50 @@ function stageDate(s, r, year) {
   return r.range ? r.range.end : new Date(year, 11, 31);
 }
 
-/* Liste de tous les points marqués dans une saison : { key, name, nat, pts, date, label } */
+/* Liste de tous les points marqués dans une saison :
+   { key, name, nat, pts, date, label, pos, kind (gc | one | stage | jersey | champ), cat (clé du barème), race } */
 function scoreEvents(D) {
   const year = D.season;
   const ev = [];
-  const add = (a, pts, date, label) => { if (a && a.name && !a.team && !/^Équipe /.test(a.name) && pts) ev.push({ key: keyOf(a.name), name: a.name, nat: a.nat, pts, date, label }); };
-  const podium = (r, tbl, what) => [r.winner, r.second, r.third].forEach((a, i) => add(a, tbl[i], r.range.end, `${what} ${raceName(r.race)}`.replace("{p}", ["1er", "2e", "3e"][i])));
+  const add = (a, pts, date, label, extra) => { if (a && a.name && !a.team && !/^Équipe /.test(a.name) && pts) ev.push({ key: keyOf(a.name), name: a.name, nat: a.nat || null, pts, date, label, ...extra }); };
+  // classement d'une course : top 10 s'il est connu, sinon podium, sinon vainqueur
+  const ranking = (r, cat, kind, date, what) => {
+    const list = r.top || [r.winner, r.second, r.third].filter(Boolean);
+    list.forEach((a, i) => add(a, BAREME[cat].top[i], date, what(i + 1), { pos: i + 1, kind, cat, race: r.race }));
+  };
   for (const r of D.worldtour || []) {
     r.range = parseRange(r.date, year);
     if (!r.winner || !r.range) continue;
     const gt = GT_NAMES.includes(r.race), staged = CyclingLive.isStageRace(r);
-    const b = gt ? BAREME.gt : MON_NAMES.includes(r.race) ? BAREME.monument : staged ? BAREME.wtStage : BAREME.wtOne;
-    if (b.gc) podium(r, b.gc, "{p} au général —"); else podium(r, b.podium, "{p} —");
-    (r.stages || []).forEach(s => add(s.winner, b.stage, stageDate(s, r, year), `Étape ${s.n} — ${raceName(r.race)}`));
-    (r.jerseys || []).forEach(j => { const p = b.jerseys?.[j.cls]; if (p && !j.name.startsWith("team:")) add({ name: j.name, nat: null }, p, r.range.end, `Maillot ${j.cls} — ${raceName(r.race)}`); });
+    const cat = gt ? "gt" : MON_NAMES.includes(r.race) ? "monument" : staged ? "wtStage" : "wtOne";
+    const name = raceName(r.race);
+    ranking(r, cat, staged ? "gc" : "one", r.range.end, p => staged ? `${ordinal(p)} au général — ${name}` : `${ordinal(p)} — ${name}`);
+    const sc = gt ? "gtStage" : "wtStageDay";
+    (r.stages || []).forEach(s => ranking({ ...s, race: r.race, top: s.top }, sc, "stage", stageDate(s, r, year), p => `${p === 1 ? "Victoire" : ordinal(p)} d'étape ${s.n} — ${name}`));
+    const jc = gt ? "gtJersey" : "wtJersey";
+    (r.jerseys || []).forEach(j => { const p = BAREME[jc].jerseys[j.cls]; if (p && !j.name.startsWith("team:")) add({ name: j.name }, p, r.range.end, `Maillot ${j.cls} — ${name}`, { pos: 1, kind: "jersey", cat: jc, race: r.race }); });
   }
   for (const r of D.proseries || []) {
     r.range = parseRange(r.date, year);
     if (!r.winner || !r.range) continue;
-    add(r.winner, BAREME.pro.win, r.range.end, `Victoire — ${raceName(r.race)}`);
-    (r.stages || []).forEach(s => add(s.winner, BAREME.pro.stage, stageDate(s, r, year), `Étape ${s.n} — ${raceName(r.race)}`));
+    const staged = CyclingLive.isStageRace(r), name = raceName(r.race);
+    ranking({ ...r, second: null, third: null }, "pro", staged ? "gc" : "one", r.range.end, p => staged ? `${ordinal(p)} au général — ${name}` : `${ordinal(p)} — ${name}`);
+    (r.stages || []).forEach(s => ranking({ ...s, race: r.race }, "proStage", "stage", stageDate(s, r, year), p => `${p === 1 ? "Victoire" : ordinal(p)} d'étape ${s.n} — ${name}`));
   }
   for (const r of D.europetour || []) {
     r.range = parseRange(r.date, year);
     if (!r.winner || !r.range || !r.rating) continue;
-    const b = /U$/.test(r.rating) ? BAREME.e2u : /\.1$/.test(r.rating) ? BAREME.e1 : BAREME.e2;
-    add(r.winner, b.win, r.range.end, `Victoire — ${raceName(r.race)} (${r.rating})`);
+    const cat = /U$/.test(r.rating) ? "e2u" : /\.1$/.test(r.rating) ? "e1" : "e2";
+    add(r.winner, BAREME[cat].top[0], r.range.end, `Victoire — ${raceName(r.race)} (${r.rating})`, { pos: 1, kind: "one", cat, race: r.race });
   }
   for (const c of D.championships || []) {
     if (c.cat !== "Hommes") continue;
     const worlds = c.champ === "Mondiaux", rr = c.event === "Course en ligne";
-    const b = worlds ? (rr ? BAREME.worldsRR : BAREME.worldsTT) : (rr ? BAREME.euroRR : BAREME.euroTT);
+    const cat = worlds ? (rr ? "worldsRR" : "worldsTT") : (rr ? "euroRR" : "euroTT");
     const date = worlds ? new Date(year, 8, 27) : new Date(year, 9, 4);
-    c.podium.forEach((a, i) => add(a, b.podium[i], date, `${["1er", "2e", "3e"][i]} — ${c.champ} (${c.event.toLowerCase()})`));
+    c.podium.forEach((a, i) => add(a, BAREME[cat].top[i], date, `${ordinal(i + 1)} — ${c.champ} (${c.event.toLowerCase()})`, { pos: i + 1, kind: "champ", cat, race: c.champ }));
   }
-  // nationalité manquante (maillots) : reprise depuis les autres résultats
+  // nationalité manquante (maillots, tops 10) : reprise depuis les autres résultats
   const nats = {};
   ev.forEach(e => { if (e.nat) nats[e.key] = e.nat; });
   ev.forEach(e => { if (!e.nat) e.nat = nats[e.key] || null; });
@@ -90,7 +106,7 @@ let HISTORY = null, ROSTER = null;
 async function loadHistory() {
   if (HISTORY) return HISTORY;
   const get = async url => { try { return await (await fetch(url)).json(); } catch { return null; } };
-  [HISTORY, ROSTER] = await Promise.all([get("cycling-history.json?v=2"), get("cycling-riders.json?v=1")]);
+  [HISTORY, ROSTER] = await Promise.all([get("cycling-history.json?v=3"), get("cycling-riders.json?v=1")]);
   HISTORY = HISTORY || {};
   MARKET = null;   // on recalcule les prix avec l'historique
   return HISTORY;
@@ -116,11 +132,12 @@ let MARKET = null;
 function buildMarket() {
   if (MARKET) return MARKET;
   const D = window.CYCLING;
-  const evs = scoreEvents(cloneData(D));
+  // saison 2026 : la version de cycling-history.json (avec les tops 10) si elle existe
+  const evs = scoreEvents(cloneData(HISTORY?.[D.season] || D));
   const teams = {};
   for (const k of ["worldtour", "proseries", "europetour"]) D[k].forEach(r => { if (r.winner && r.team) teams[keyOf(r.winner.name)] = r.team; });
   const years = SEASON_WEIGHTS.map((w, i) => ({ y: D.season - i, w }));
-  const blank = () => ({ pts: 0, wins: 0, podiums: 0, seasons: {}, score: 0, best: [] });
+  const blank = () => ({ pts: 0, wins: 0, podiums: 0, top10: 0, seasons: {}, score: 0, best: [], events: {}, breakdown: [] });
   const by = new Map();
   const rider = e => by.get(e.key) || by.set(e.key, { key: e.key, name: e.name, nat: e.nat, ...blank() }).get(e.key);
   // 1. tous les coureurs des équipes World Tour et ProTeam, même sans résultat
@@ -142,9 +159,14 @@ function buildMarket() {
       const p = list.reduce((s, e) => s + e.pts, 0);
       o.seasons[y] = p;
       o.score += w * p;
+      o.breakdown.push({ y, pts: p, w });
+      if (list.length) o.events[y] = list;
       list.forEach(e => {
-        if (/^(Victoire|1er|Étape)/.test(e.label)) o.wins++;
-        else if (/^(2e|3e)/.test(e.label)) o.podiums++;
+        if (e.kind !== "jersey") {
+          if (e.pos === 1) o.wins++;
+          else if (e.pos <= 3) o.podiums++;
+          if (e.pos <= 10) o.top10++;
+        }
         if (!o.nat && e.nat) o.nat = e.nat;
       });
       if (i === 0) { o.pts = p; o.best = list; }
@@ -152,7 +174,10 @@ function buildMarket() {
     });
     o.active = Object.values(o.seasons).filter(Boolean).length;
     o.age = ageOf(o.born);
-    o.score *= ageFactor(o.age) * formFactor(years.slice(0, 3).map(({ y }) => o.seasons[y]));
+    o.base = o.score;
+    o.ageF = ageFactor(o.age);
+    o.formF = formFactor(years.slice(0, 3).map(({ y }) => o.seasons[y]));
+    o.score *= o.ageF * o.formF;
   });
   const max = Math.max(...[...by.values()].map(r => r.score));
   const list = [...by.values()].map(r => {
@@ -161,7 +186,10 @@ function buildMarket() {
     r.best.sort((a, b) => b.pts - a.pts);
     return { ...r, team: teams[r.key] || null, price, tier: TIERS.find(t => price >= t.min), best: r.best.slice(0, 4) };
   }).sort((a, b) => b.price - a.price || b.score - a.score || a.name.localeCompare(b.name));
-  MARKET = { list, by: new Map(list.map(r => [r.key, r])), events2026: evs, years: years.map(x => x.y) };
+  list.forEach((r, i) => { r.rank = i + 1; r.value = r.pts / r.price; });
+  const values = list.filter(r => r.pts >= 100 && r.price <= 40).map(r => r.value).sort((a, b) => b - a);
+  const valueTop = values[Math.floor(values.length * .15)] || Infinity;   // les 15 % les plus rentables parmi les coureurs à 40 ou moins
+  MARKET = { list, by: new Map(list.map(r => [r.key, r])), events2026: evs, years: years.map(x => x.y), max, valueTop };
   return MARKET;
 }
 const riderTeam = r => r.rteam || teamName(r.team) || natFr(r.nat);
@@ -176,12 +204,16 @@ async function loadLive(force = false) {
     try {
       const prev = cached?.data;
       LIVE = await CyclingLive.loadSeason(YEAR, {
-        onProgress: (d, t) => { const el = document.getElementById("live-progress"); if (el) el.textContent = `Lecture des courses à étapes ${d}/${t}…`; },
-        // une course à étapes terminée depuis plus de 10 jours et déjà lue n'est pas relue
+        onProgress: (d, t) => { const el = document.getElementById("live-progress"); if (el) el.textContent = `Lecture des résultats des courses ${d}/${t}…`; },
+        // une course terminée depuis plus de 10 jours et déjà lue n'est pas relue
         skipStage: r => {
-          const old = prev && [...prev.worldtour, ...prev.proseries].find(x => x.race === r.race && x.stages);
+          const old = prev && [...prev.worldtour, ...prev.proseries].find(x => x.race === r.race && (x.stages || x.top));
           const end = parseRange(r.date, YEAR)?.end;
-          if (old && end && Date.now() - end > 10 * 864e5) { r.stages = old.stages; if (old.jerseys) r.jerseys = old.jerseys; return true; }
+          if (old && end && Date.now() - end > 10 * 864e5) {
+            for (const k of ["stages", "jerseys", "top", "cls"]) if (old[k]) r[k] = old[k];
+            delete r._oneDay;
+            return true;
+          }
           return false;
         },
       });
@@ -419,7 +451,8 @@ const initials = n => n.split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).
 
 function riderCard(r, { inTeam, canAdd, compact, pts } = {}) {
   return `
-    <article class="rcard tier-${r.tier.id} ${inTeam ? "picked" : ""} ${compact ? "compact" : ""}">
+    <article class="rcard tier-${r.tier.id} ${inTeam ? "picked" : ""} ${compact ? "compact" : ""}" data-rider="${esc(r.key)}" title="Voir la fiche de ${esc(r.name)}">
+      ${riderBadges(r).slice(0, 1).map(b => `<span class="rflag ${b.c}" title="${esc(b.t)}">${b.i}</span>`).join("")}
       <header>
         ${tierBadge(r.tier)}
         <span class="price"><b>${r.price}</b><small>pts</small></span>
@@ -433,7 +466,7 @@ function riderCard(r, { inTeam, canAdd, compact, pts } = {}) {
         ${compact ? "" : `<div><dt title="Points de 2020 à 2024">20-24</dt><dd>${[2024, 2023, 2022, 2021, 2020].reduce((s, y) => s + (r.seasons?.[y] || 0), 0)}</dd></div>`}
         ${pts != null ? `<div class="live"><dt>${YEAR}</dt><dd>${pts}</dd></div>` : ""}
       </dl>
-      ${compact ? "" : `<div class="rcareer">${r.wins ? `<b>${r.wins}</b> victoire${r.wins > 1 ? "s" : ""}` : "Aucune victoire"}${r.podiums ? ` · <b>${r.podiums}</b> podium${r.podiums > 1 ? "s" : ""}` : ""} <span>depuis 2020</span></div>
+      ${compact ? "" : `<div class="rcareer">${r.wins ? `<b>${r.wins}</b> victoire${r.wins > 1 ? "s" : ""}` : "Aucune victoire"}${r.podiums ? ` · <b>${r.podiums}</b> podium${r.podiums > 1 ? "s" : ""}` : ""}${r.top10 ? ` · <b>${r.top10}</b> top 10` : ""} <span>depuis 2020</span></div>
         <ul class="rbest">${r.best.slice(0, 2).map(e => `<li>${esc(e.label)}</li>`).join("") || `<li>${r.level === "PRT" ? "Équipe ProTeam" : r.level === "WT" ? "Équipe World Tour" : ""}</li>`}</ul>`}
       ${compact ? "" : inTeam ? `<button class="rbtn remove" data-remove="${esc(r.key)}">Retirer</button>`
         : canAdd ? `<button class="rbtn add" data-add="${esc(r.key)}">Ajouter · ${r.price}</button>`
@@ -491,7 +524,7 @@ function playerList(rows, m, started) {
       <span class="pos">${i + 1}</span>
       <div class="rk-main">
         <b>${esc(p.pseudo)}</b>${g ? ` <span class="rk-group">${esc(g.name)}</span>` : ""}
-        <div class="rk-riders">${(p.riders || []).map(k => m.by.get(k)).filter(Boolean).map(r => `<span>${cflag(r.nat)}${esc(r.name.split(" ").slice(-1)[0])}</span>`).join("") || "<span>Pas encore de coureurs</span>"}</div>
+        <div class="rk-riders">${(p.riders || []).map(k => m.by.get(k)).filter(Boolean).map(r => `<span class="rk-rider" data-rider="${esc(r.key)}">${cflag(r.nat)}${esc(r.name.split(" ").slice(-1)[0])}</span>`).join("") || "<span>Pas encore de coureurs</span>"}</div>
       </div>
       <div class="rk-pts"><b>${v}</b><small>${started ? "pts" : "pts (simul. 2026)"}</small></div>
     </li>`;
@@ -654,8 +687,10 @@ function drawGame() {
     if (game.sort === "cheap") list = [...list].sort((a, b) => a.price - b.price || b.pts - a.pts);
     if (game.sort === "young") list = [...list].sort((a, b) => (a.age ?? 99) - (b.age ?? 99) || b.price - a.price);
     if (game.sort === "wins") list = [...list].sort((a, b) => b.wins - a.wins || b.price - a.price);
+    if (game.sort === "top10") list = [...list].sort((a, b) => b.top10 - a.top10 || b.price - a.price);
     const shown = list.slice(0, 120);
-    body = budgetBar + `
+    const pure = !q && game.tier === "all" && !game.be && !game.young;
+    body = budgetBar + (pure ? trendsHTML(m) : "") + `
       <div class="toolbar">
         <input class="search" id="g-q" type="search" placeholder="Coureur ou équipe…" value="${esc(game.q)}">
         <button class="chip be ${game.be ? "on" : ""}" data-gbe>${flagImg("be")} Belges</button>
@@ -667,6 +702,7 @@ function drawGame() {
           <option value="pts" ${game.sort === "pts" ? "selected" : ""}>Points 2026 ↓</option>
           <option value="value" ${game.sort === "value" ? "selected" : ""}>Bonnes affaires</option>
           <option value="wins" ${game.sort === "wins" ? "selected" : ""}>Victoires depuis 2020</option>
+          <option value="top10" ${game.sort === "top10" ? "selected" : ""}>Tops 10 depuis 2020</option>
           <option value="young" ${game.sort === "young" ? "selected" : ""}>Plus jeunes</option>
         </select>
       </div>
@@ -696,8 +732,6 @@ function drawGame() {
 }
 
 function rulesHTML() {
-  const row = (b, cols) => `<tr><td>${esc(b.label)}</td><td>${cols}</td></tr>`;
-  const pod = p => `${p[0]} / ${p[1]} / ${p[2]}`;
   return `
     <section class="rules">
       <div class="section-title"><h2>Règles</h2></div>
@@ -707,23 +741,16 @@ function rulesHTML() {
         <li>Ensuite, ${WINDOWS.length} fenêtre${WINDOWS.length > 1 ? "s" : ""} de transferts : ${WINDOWS.map(w => `<b>${esc(w.name)}</b> (${w.start.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })} – ${w.end.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}, ${w.max} transferts)`).join(", ")}.</li>
         <li>Un coureur ne rapporte que les points marqués <b>pendant qu'il est dans ton équipe</b>.</li>
         <li>Les résultats sont lus automatiquement sur Wikipédia. Le joueur avec le plus de points au dernier jour de la saison gagne.</li>
+        <li>Touche un coureur pour ouvrir sa <b>fiche</b> : ses résultats depuis 2020, ses points saison par saison et le détail du calcul de son prix.</li>
       </ul>
       <div class="section-title"><h2>Barème</h2><span>points par résultat</span></div>
+      <p class="hint">Points du 1er au 10e (les tops 10 publiés sur Wikipédia). Quand une course ne publie pas son top 10, seuls le podium ou le vainqueur sont comptés.</p>
       <div class="table-wrap"><table class="race-table bareme">
-        <thead><tr><th>Course</th><th>Points</th></tr></thead>
+        <thead><tr><th>Course</th>${Array.from({ length: 10 }, (_, i) => `<th class="bpos">${ordinal(i + 1)}</th>`).join("")}</tr></thead>
         <tbody>
-          ${row(BAREME.gt, `Général ${pod(BAREME.gt.gc)} · étape ${BAREME.gt.stage} · maillot points / montagne ${BAREME.gt.jerseys.Points} · jeune ${BAREME.gt.jerseys.Jeune}`)}
-          ${row(BAREME.monument, `Podium ${pod(BAREME.monument.podium)}`)}
-          ${row(BAREME.wtOne, `Podium ${pod(BAREME.wtOne.podium)}`)}
-          ${row(BAREME.wtStage, `Général ${pod(BAREME.wtStage.gc)} · étape ${BAREME.wtStage.stage} · maillot points / montagne ${BAREME.wtStage.jerseys.Points}`)}
-          ${row(BAREME.pro, `Victoire ${BAREME.pro.win} · étape ${BAREME.pro.stage}`)}
-          ${row(BAREME.e1, `Victoire ${BAREME.e1.win}`)}
-          ${row(BAREME.e2, `Victoire ${BAREME.e2.win}`)}
-          ${row(BAREME.e2u, `Victoire ${BAREME.e2u.win}`)}
-          ${row(BAREME.worldsRR, `Podium ${pod(BAREME.worldsRR.podium)}`)}
-          ${row(BAREME.worldsTT, `Podium ${pod(BAREME.worldsTT.podium)}`)}
-          ${row(BAREME.euroRR, `Podium ${pod(BAREME.euroRR.podium)}`)}
-          ${row(BAREME.euroTT, `Podium ${pod(BAREME.euroTT.podium)}`)}
+          ${Object.values(BAREME).map(b => b.jerseys
+            ? `<tr><td>${esc(b.label)}</td><td colspan="10">${Object.entries(b.jerseys).map(([k, v]) => `${k === "Points" ? "Points" : k === "Montagne" ? "Montagne" : "Jeune"} <b>${v}</b>`).join(" · ")}</td></tr>`
+            : `<tr><td>${esc(b.label)}</td>${Array.from({ length: 10 }, (_, i) => `<td class="bpos">${b.top[i] ?? ""}</td>`).join("")}</tr>`).join("")}
         </tbody>
       </table></div>
     </section>`;
@@ -744,6 +771,8 @@ async function onGameClick(e) {
   if (g) { game.tab = g.dataset.gtab; game.msg = null; drawGame(); window.scrollTo(0, 0); return; }
   const au = t.closest("[data-auth]");
   if (au) { game.authMode = au.dataset.auth; game.msg = null; drawGame(); return; }
+  const card = t.closest("[data-rider]");
+  if (card && (!t.closest("button") || t.closest("button") === card) && !t.closest("#rider-modal")) { openRider(card.dataset.rider); return; }
   const add = t.closest("[data-add]");
   if (add) {
     const k = add.dataset.add;
@@ -815,4 +844,127 @@ async function onGameSubmit(e) {
   game.busy = false; drawGame();
 }
 
-window.ArenaGame = { renderGame, buildMarket, scoreEvents, teamScore, applyRoster, phase };
+// ---------------------------------------------------------------- tendances du marché (au-dessus des cartes)
+function trendsHTML(m) {
+  const chosen = game.players.some(p => (p.riders || []).length)
+    ? m.list.map(r => ({ r, v: ownership(r.key) })).filter(x => x.v).sort((a, b) => b.v - a.v).slice(0, 5).map(x => [x.r, `${x.v} %`]) : [];
+  const blocks = [
+    ["⭐ Les plus choisis", chosen],
+    ["💎 Bonnes affaires (40 ou moins)", m.list.filter(r => r.pts >= 100 && r.price <= 40).sort((a, b) => b.value - a.value).slice(0, 5).map(r => [r, `${r.pts} pts 2026 · ${r.price}`])],
+    ["🔥 En forme", m.list.filter(r => r.price >= 10).sort((a, b) => (b.seasons[m.years[0]] - (b.seasons[m.years[1]] || 0)) - (a.seasons[m.years[0]] - (a.seasons[m.years[1]] || 0))).slice(0, 5).map(r => [r, `+${r.seasons[m.years[0]] - (r.seasons[m.years[1]] || 0)} pts sur 2025`])],
+    ["🌱 Jeunes talents", m.list.filter(r => r.age != null && r.age <= 23).slice(0, 5).map(r => [r, `${r.age} ans · ${r.price}`])],
+  ].filter(b => b[1].length);
+  return `<div class="trends">${blocks.map(([t, rows]) => `
+    <div class="trend"><div class="mp-title">${t}</div>
+      ${rows.map(([r, v], i) => `<button class="trend-row" data-rider="${esc(r.key)}"><span class="tn">${i + 1}</span>${cflag(r.nat)}<b>${esc(r.name)}</b><span class="tv">${esc(v)}</span></button>`).join("")}
+    </div>`).join("")}</div>`;
+}
+
+// ---------------------------------------------------------------- fiche d'un coureur
+/* pourcentage des joueurs qui ont ce coureur dans leur équipe */
+function ownership(key) {
+  const ps = game.players.filter(p => (p.riders || []).length);
+  return ps.length ? Math.round(100 * ps.filter(p => p.riders.includes(key)).length / ps.length) : null;
+}
+/* petites étiquettes : forme, jeune talent, bonne affaire, valeur sûre… (la plus parlante d'abord) */
+function riderBadges(r) {
+  const out = [];
+  if (r.formF >= 1.05) out.push({ i: "🔥", c: "hot", t: "En forme : 2026 bien au-dessus des deux saisons d'avant" });
+  if (r.age != null && r.age <= 23 && r.price >= 15) out.push({ i: "🌱", c: "young", t: "Jeune talent : 23 ans ou moins, déjà des résultats" });
+  if (r.pts >= 100 && r.price <= 40 && MARKET && r.value >= MARKET.valueTop) out.push({ i: "💎", c: "value", t: "Bonne affaire : beaucoup de points 2026 pour son prix" });
+  if (r.active >= 6 && r.price >= 25) out.push({ i: "🛡️", c: "solid", t: "Valeur sûre : des points presque chaque saison depuis 2020" });
+  if (r.formF <= .95 && r.price >= 15) out.push({ i: "📉", c: "down", t: "En baisse : 2026 en dessous des deux saisons d'avant" });
+  return out;
+}
+const pctF = x => `${x > 1 ? "+" : x < 1 ? "−" : "±"}${Math.round(Math.abs(x - 1) * 100)} %`;
+function riderSheetHTML(r) {
+  const m = buildMarket();
+  const ph = phase();
+  const own = ownership(r.key);
+  const started = new Date() >= LOCK;
+  const live = started ? LIVE_EVENTS.filter(e => e.key === r.key) : [];
+  const inDraft = game.draft?.includes(r.key);
+  const left = BUDGET - (game.draft || []).reduce((s, k) => s + (m.by.get(k)?.price || 0), 0);
+  const years = [...m.years].reverse();   // de la plus ancienne à la plus récente
+  const maxY = Math.max(1, ...years.map(y => r.seasons[y] || 0));
+  const all = Object.values(r.events).flat();
+  const bestGT = all.filter(e => e.cat === "gt").sort((a, b) => a.pos - b.pos)[0];
+  const stageWins = all.filter(e => e.kind === "stage" && e.pos === 1).length;
+  const badges = riderBadges(r);
+  const contrib = r.breakdown.filter(b => b.pts);
+  const btn = !game.me ? "" : inDraft ? (ph.open ? `<button class="rbtn remove" data-remove="${esc(r.key)}">Retirer de mon équipe</button>` : "")
+    : ph.open && game.draft.length < SIZE ? (r.price <= left ? `<button class="rbtn add" data-add="${esc(r.key)}">Ajouter à mon équipe · ${r.price}</button>` : `<button class="rbtn" disabled>Budget insuffisant (${left} restants)</button>`) : "";
+  const tile = (v, l) => `<div class="rs-tile"><b>${v}</b><span>${l}</span></div>`;
+  return `
+    <div class="modal-card rs-card tier-${r.tier.id}" role="dialog" aria-modal="true">
+      <button class="modal-x" data-rclose aria-label="Fermer">✕</button>
+      <div class="rs-head">
+        <div class="mono rs-mono"><span>${esc(initials(r.name))}</span>${r.nat ? cflag(r.nat, "flag lg") : ""}</div>
+        <div class="rs-id">
+          <div>${tierBadge(r.tier)} <span class="rs-rank">n° ${r.rank} du marché sur ${m.list.length}</span></div>
+          <h2>${esc(r.name)}</h2>
+          <div class="sub">${esc(riderTeam(r))}${r.level ? ` · ${r.level === "WT" ? "World Tour" : "ProTeam"}` : ""}${r.nat ? ` · ${esc(natFr(r.nat))}` : ""}${r.age != null ? ` · ${r.age} ans (né le ${new Date(r.born).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })})` : ""}</div>
+          ${badges.length ? `<div class="rs-badges">${badges.map(b => `<span class="rs-badge ${b.c}" title="${esc(b.t)}">${b.i} ${esc(b.t.split(" : ")[0])}</span>`).join("")}</div>` : ""}
+        </div>
+        <div class="rs-price"><b>${r.price}</b><span>points de budget</span>${own != null ? `<em>${own ? `dans ${own} % des équipes` : "dans aucune équipe pour l'instant"}</em>` : ""}</div>
+      </div>
+      ${btn ? `<div class="rs-action">${btn}</div>` : ""}
+      <div class="rs-tiles">
+        ${tile(r.wins, `victoire${r.wins > 1 ? "s" : ""}`)}${tile(r.podiums, "autres podiums")}${tile(r.top10, "tops 10")}
+        ${tile(stageWins, `étape${stageWins > 1 ? "s" : ""} gagnée${stageWins > 1 ? "s" : ""}`)}${tile(bestGT ? ordinal(bestGT.pos) : "–", "meilleur Grand Tour")}${tile(`${r.active}/${years.length}`, "saisons avec points")}
+      </div>
+      <div class="modal-grid rs-grid">
+        <div class="mpanel">
+          <div class="mp-title">Points par saison</div>
+          <div class="rs-bars">${years.map(y => `<div class="rs-bar ${y === m.years[0] ? "cur" : ""}"><b>${r.seasons[y] || 0}</b><div class="rs-col"><i style="height:${Math.round(100 * (r.seasons[y] || 0) / maxY)}%"></i></div><span>${y}</span></div>`).join("")}</div>
+          ${started ? `<p class="hint">Saison ${YEAR} : <b>${live.reduce((s, e) => s + e.pts, 0)}</b> points marqués.</p>` : ""}
+        </div>
+        <div class="mpanel">
+          <div class="mp-title">Comment son prix est calculé</div>
+          <table class="rs-calc">
+            ${contrib.map(b => `<tr><td>${b.y}</td><td>${b.pts} pts</td><td>× ${Math.round(b.w * 100)} %</td><td>${Math.round(b.pts * b.w)}</td></tr>`).join("") || `<tr><td colspan="4">Aucun point depuis 2020</td></tr>`}
+            <tr class="sum"><td colspan="3">Total pondéré</td><td>${Math.round(r.base)}</td></tr>
+            <tr><td colspan="3">Âge${r.age != null ? ` (${r.age} ans)` : " (inconnu)"}</td><td>${pctF(r.ageF)}</td></tr>
+            <tr><td colspan="3">Forme (2026 contre 2024-2025)</td><td>${pctF(r.formF)}</td></tr>
+            <tr class="sum"><td colspan="3">Score final</td><td>${Math.round(r.score)}</td></tr>
+          </table>
+          <p class="hint">${r.score > 0 ? `Prix = 5 + 95 × √(score ÷ ${Math.round(m.max)}, le score du n° 1) = <b>${r.price}</b>.` : `Aucun point depuis 2020 : prix plancher de ${r.price}${r.price === 4 ? " (jeune coureur)" : ""}.`} Le même calcul pour tous les coureurs.</p>
+        </div>
+      </div>
+      <div class="mp-title rs-res-title">Ses résultats qui rapportent des points</div>
+      ${[...years].reverse().filter(y => r.events[y]).map((y, i) => {
+        const list = [...r.events[y]].sort((a, b) => b.pts - a.pts);
+        return `<details class="rs-season" ${i === 0 ? "open" : ""}><summary><b>${y}</b><span>${list.length} résultat${list.length > 1 ? "s" : ""} · ${r.seasons[y]} pts</span></summary>
+          <table class="race-table rs-res">${list.map(e => `<tr><td class="rpos p${Math.min(e.pos, 4)}">${e.kind === "jersey" ? "👕" : e.pos}</td><td>${esc(e.label)}</td><td class="pts-cell">+${e.pts}</td></tr>`).join("")}</table></details>`;
+      }).join("") || `<div class="empty">Pas encore de résultat dans les courses suivies (World Tour, ProSeries, Europe Tour, championnats).</div>`}
+    </div>`;
+}
+function openRider(key) {
+  const r = buildMarket().by.get(key);
+  if (!r) return;
+  arenaTrack("Je parie · fiche coureur");
+  let el = document.getElementById("rider-modal");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "rider-modal";
+    el.className = "modal";
+    el.addEventListener("click", async e => {
+      if (e.target === el || e.target.closest("[data-rclose]")) return closeRider();
+      const a = e.target.closest("[data-add],[data-remove]");
+      if (a) { await onGameClick(e); el.innerHTML = riderSheetHTML(buildMarket().by.get(el.dataset.key)); }
+    });
+    document.addEventListener("keydown", e => { if (e.key === "Escape") closeRider(); });
+    document.body.appendChild(el);
+  }
+  el.dataset.key = key;
+  el.innerHTML = riderSheetHTML(r);
+  el.classList.add("show");
+  el.scrollTop = 0;
+  document.body.style.overflow = "hidden";
+}
+function closeRider() {
+  const el = document.getElementById("rider-modal");
+  if (el?.classList.contains("show")) { el.classList.remove("show"); document.body.style.overflow = ""; }
+}
+
+window.ArenaGame = { renderGame, buildMarket, scoreEvents, teamScore, applyRoster, phase, openRider };
