@@ -82,13 +82,16 @@ function scoreEvents(D) {
   return ev;
 }
 
-// ---------------------------------------------------------------- marché (prix = 3 dernières saisons)
-/* Saisons passées (cycling-history.json, mêmes données que cycling-data.js). La plus récente compte le plus. */
-const SEASON_WEIGHTS = [1, .6, .35];
-let HISTORY = null;
+// ---------------------------------------------------------------- marché (prix = 7 saisons + âge + forme)
+/* Saisons passées (cycling-history.json, mêmes données que cycling-data.js) : la plus récente compte le plus.
+   Effectifs (cycling-riders.json) : tous les coureurs World Tour et ProTeam, avec équipe et date de naissance. */
+const SEASON_WEIGHTS = [1, .7, .5, .35, .25, .15, .1];
+let HISTORY = null, ROSTER = null;
 async function loadHistory() {
   if (HISTORY) return HISTORY;
-  try { HISTORY = await (await fetch("cycling-history.json?v=1")).json(); } catch { HISTORY = {}; }
+  const get = async url => { try { return await (await fetch(url)).json(); } catch { return null; } };
+  [HISTORY, ROSTER] = await Promise.all([get("cycling-history.json?v=2"), get("cycling-riders.json?v=1")]);
+  HISTORY = HISTORY || {};
   MARKET = null;   // on recalcule les prix avec l'historique
   return HISTORY;
 }
@@ -96,8 +99,19 @@ const TIERS = [
   { min: 70, id: "legend", name: "Légende" },
   { min: 45, id: "star", name: "Star" },
   { min: 25, id: "pro", name: "Pro" },
-  { min: 0, id: "rookie", name: "Outsider" },
+  { min: 10, id: "rookie", name: "Outsider" },
+  { min: 0, id: "domestique", name: "Équipier" },
 ];
+// âge au 1er janvier de la saison jouée
+const ageOf = born => { if (!born) return null; const [y, m, d] = born.split("-").map(Number); return YEAR - y - (m > 1 || d > 1 ? 1 : 0); };
+// les jeunes progressent encore, les plus de 33 ans déclinent en moyenne
+const ageFactor = a => a == null ? 1 : a <= 22 ? 1.15 : a <= 25 ? 1.08 : a <= 31 ? 1 : a <= 33 ? .92 : a <= 35 ? .82 : .72;
+// forme : 2026 au-dessus ou en dessous de la moyenne des deux saisons précédentes (±10 % max)
+const formFactor = s => {
+  const ref = ((s[1] || 0) + (s[2] || 0)) / 2;
+  if (!s[0] && !ref) return 1;
+  return 1 + .1 * Math.max(-1, Math.min(1, (s[0] - ref) / Math.max(s[0], ref, 30)));
+};
 let MARKET = null;
 function buildMarket() {
   if (MARKET) return MARKET;
@@ -105,39 +119,52 @@ function buildMarket() {
   const evs = scoreEvents(cloneData(D));
   const teams = {};
   for (const k of ["worldtour", "proseries", "europetour"]) D[k].forEach(r => { if (r.winner && r.team) teams[keyOf(r.winner.name)] = r.team; });
-  const by = new Map();
-  const rider = e => by.get(e.key) || by.set(e.key, { key: e.key, name: e.name, nat: e.nat, pts: 0, wins: 0, best: [], seasons: {}, score: 0 }).get(e.key);
-  for (const e of evs) {
-    const o = rider(e);
-    o.pts += e.pts;
-    if (/^(Victoire|1er|Étape)/.test(e.label)) o.wins++;
-    o.best.push(e);
-    if (!o.nat && e.nat) o.nat = e.nat;
-  }
-  // saisons passées : comptent pour le prix, seulement pour les coureurs encore actifs (des points cette saison ou la précédente)
   const years = SEASON_WEIGHTS.map((w, i) => ({ y: D.season - i, w }));
-  const perYear = years.slice(1).map(({ y, w }) => {
-    const H = HISTORY?.[y];
+  const blank = () => ({ pts: 0, wins: 0, podiums: 0, seasons: {}, score: 0, best: [] });
+  const by = new Map();
+  const rider = e => by.get(e.key) || by.set(e.key, { key: e.key, name: e.name, nat: e.nat, ...blank() }).get(e.key);
+  // 1. tous les coureurs des équipes World Tour et ProTeam, même sans résultat
+  for (const r of ROSTER?.riders || []) {
+    const o = rider({ key: keyOf(r.name), name: r.name, nat: r.nat });
+    Object.assign(o, { born: r.born, rteam: r.team, level: r.level });
+  }
+  // 2. résultats saison par saison ; un coureur absent des effectifs doit avoir marqué en 2026 (sinon il a sans doute arrêté)
+  const perYear = years.map(({ y, w }, i) => {
+    const list = i === 0 ? evs : HISTORY?.[y] ? scoreEvents(cloneData(HISTORY[y])) : [];
     const m = new Map();
-    if (H) scoreEvents(cloneData(H)).forEach(e => { const o = m.get(e.key) || m.set(e.key, { e, pts: 0 }).get(e.key); o.pts += e.pts; });
+    list.forEach(e => (m.get(e.key) || m.set(e.key, []).get(e.key)).push(e));
     return { y, w, m };
   });
-  const prev = perYear[0];
-  prev?.m.forEach(({ e }) => { const o = rider(e); if (!o.nat && e.nat) o.nat = e.nat; });
+  perYear[0].m.forEach(list => rider(list[0]));
   by.forEach(o => {
-    o.seasons[D.season] = o.pts;
-    o.score = o.pts;
-    perYear.forEach(({ y, w, m }) => { const p = m.get(o.key)?.pts || 0; o.seasons[y] = p; o.score += w * p; });
+    perYear.forEach(({ y, w, m }, i) => {
+      const list = m.get(o.key) || [];
+      const p = list.reduce((s, e) => s + e.pts, 0);
+      o.seasons[y] = p;
+      o.score += w * p;
+      list.forEach(e => {
+        if (/^(Victoire|1er|Étape)/.test(e.label)) o.wins++;
+        else if (/^(2e|3e)/.test(e.label)) o.podiums++;
+        if (!o.nat && e.nat) o.nat = e.nat;
+      });
+      if (i === 0) { o.pts = p; o.best = list; }
+      else if (i <= 2) o.best = o.best.concat(list.map(e => ({ ...e, label: `${e.label} (${y})`, pts: e.pts * w })));
+    });
+    o.active = Object.values(o.seasons).filter(Boolean).length;
+    o.age = ageOf(o.born);
+    o.score *= ageFactor(o.age) * formFactor(years.slice(0, 3).map(({ y }) => o.seasons[y]));
   });
   const max = Math.max(...[...by.values()].map(r => r.score));
   const list = [...by.values()].map(r => {
-    const price = Math.round(5 + 95 * Math.sqrt(r.score / max));   // de ~10 (une petite victoire) à 100 (le n°1)
+    // de 3 (équipier sans résultat) à 100 (le n°1) ; un jeune sans résultat vaut un peu plus
+    const price = r.score > 0 ? Math.max(5, Math.round(5 + 95 * Math.sqrt(r.score / max))) : r.age != null && r.age <= 23 ? 4 : 3;
     r.best.sort((a, b) => b.pts - a.pts);
     return { ...r, team: teams[r.key] || null, price, tier: TIERS.find(t => price >= t.min), best: r.best.slice(0, 4) };
-  }).sort((a, b) => b.price - a.price || b.score - a.score);
-  MARKET = { list, by: new Map(list.map(r => [r.key, r])), events2026: evs };
+  }).sort((a, b) => b.price - a.price || b.score - a.score || a.name.localeCompare(b.name));
+  MARKET = { list, by: new Map(list.map(r => [r.key, r])), events2026: evs, years: years.map(x => x.y) };
   return MARKET;
 }
+const riderTeam = r => r.rteam || teamName(r.team) || natFr(r.nat);
 
 // ---------------------------------------------------------------- résultats de la saison jouée (Wikipédia, en cache 3 h)
 let LIVE = null, LIVE_EVENTS = [];
@@ -246,6 +273,27 @@ const Local = {
   async myFoot(me) { const p = this._db().players[me.id] || {}; return { id: me.id, pseudo: me.pseudo, teams: [], history: [], changes: 0, ...(p.foot || {}) }; },
   async listFoot() { return Object.values(this._db().players).map(p => ({ id: p.id, pseudo: p.pseudo, teams: [], history: [], changes: 0, ...(p.foot || {}) })); },
   async saveFoot(f) { const d = this._db(); const { id, pseudo, ...rest } = f; d.players[id].foot = { ...rest, updatedAt: new Date().toISOString() }; this._save(d); return { id, pseudo, ...d.players[id].foot }; },
+  // groupes : un joueur fait partie d'un seul groupe à la fois
+  async groups() {
+    const d = this._db();
+    return { groups: Object.values(d.groups || {}), members: Object.values(d.players).filter(p => p.group).map(p => ({ user: p.id, group: p.group })) };
+  },
+  async createGroup(me, name) {
+    const d = this._db();
+    d.groups = d.groups || {};
+    if (Object.values(d.groups).some(g => keyOf(g.name) === keyOf(name))) throw new Error("Ce nom de groupe est déjà pris.");
+    const id = "g" + Date.now().toString(36);
+    d.groups[id] = { id, name, owner: me.id };
+    this._save(d);
+    return this.joinGroup(me, id);
+  },
+  async joinGroup(me, id) { const d = this._db(); d.players[me.id].group = id; this._save(d); },
+  async leaveGroup(me) {
+    const d = this._db(), id = d.players[me.id].group;
+    delete d.players[me.id].group;
+    if (id && !Object.values(d.players).some(p => p.group === id)) delete d.groups[id];   // groupe vide : supprimé
+    this._save(d);
+  },
 };
 
 const Online = {
@@ -321,6 +369,33 @@ const Online = {
     if (error) throw new Error(/row-level security/i.test(error.message) ? "Enregistrement refusé : la saison du jeu est terminée." : error.message);
     return this._frow(data);
   },
+  // groupes (tables créées par supabase-groups.sql)
+  async groups() {
+    await this.init();
+    const [g, m] = await Promise.all([this.sb.from("groups").select("id,name,owner"), this.sb.from("group_members").select("user_id,group_id")]);
+    const error = g.error || m.error;
+    if (error) throw new Error(/does not exist|schema cache/i.test(error.message) ? "Les groupes ne sont pas encore activés sur le serveur (script supabase-groups.sql)." : error.message);
+    return { groups: g.data, members: m.data.map(r => ({ user: r.user_id, group: r.group_id })) };
+  },
+  async createGroup(me, name) {
+    await this.init();
+    const { data, error } = await this.sb.from("groups").insert({ name, owner: me.id }).select().single();
+    if (error) throw new Error(/duplicate|unique/i.test(error.message) ? "Ce nom de groupe est déjà pris." : error.message);
+    return this.joinGroup(me, data.id);
+  },
+  async joinGroup(me, id) {
+    await this.init();
+    const { error } = await this.sb.from("group_members").upsert({ user_id: me.id, group_id: id });
+    if (error) throw new Error(error.message);
+  },
+  async leaveGroup(me) {
+    await this.init();
+    const { data } = await this.sb.from("group_members").select("group_id").eq("user_id", me.id).maybeSingle();
+    const { error } = await this.sb.from("group_members").delete().eq("user_id", me.id);
+    if (error) throw new Error(error.message);
+    // groupe vide : son créateur le supprime (les règles du serveur refusent si quelqu'un y est encore)
+    if (data) await this.sb.from("groups").delete().eq("id", data.group_id).eq("owner", me.id);
+  },
 };
 const frAuth = m => /invalid login/i.test(m) ? "E-mail ou mot de passe incorrect."
   : /already registered/i.test(m) ? "Un compte existe déjà avec cet e-mail : connecte-toi."
@@ -329,7 +404,7 @@ const frAuth = m => /invalid login/i.test(m) ? "E-mail ou mot de passe incorrect
 const Backend = ONLINE ? Online : Local;
 
 // ---------------------------------------------------------------- interface
-const game = { mode: store.get("jeu-mode", "velo"), tab: "team", me: null, draft: null, q: "", tier: "all", be: false, sort: "price", players: [], msg: null, busy: false, authMode: "signup" };
+const game = { mode: store.get("jeu-mode", "velo"), tab: "team", me: null, draft: null, q: "", tier: "all", be: false, young: false, sort: "price", players: [], groups: null, groupErr: null, openGroup: null, msg: null, busy: false, authMode: "signup" };
 
 function modeSwitchHTML() {
   return `<div class="gmode" role="tablist">
@@ -351,14 +426,15 @@ function riderCard(r, { inTeam, canAdd, compact, pts } = {}) {
       </header>
       <div class="mono"><span>${esc(initials(r.name))}</span>${r.nat ? cflag(r.nat, "flag lg") : ""}</div>
       <h4 title="${esc(r.name)}">${esc(r.name)}</h4>
-      <div class="rteam">${esc(teamName(r.team) || natFr(r.nat))}</div>
+      <div class="rteam">${esc(riderTeam(r))}${r.age != null ? ` · ${r.age} ans` : ""}</div>
       <dl class="rstats">
         <div><dt>2026</dt><dd>${r.pts}</dd></div>
         <div><dt>2025</dt><dd>${r.seasons?.[2025] ?? "–"}</dd></div>
-        ${compact ? "" : `<div><dt>2024</dt><dd>${r.seasons?.[2024] ?? "–"}</dd></div>`}
+        ${compact ? "" : `<div><dt title="Points de 2020 à 2024">20-24</dt><dd>${[2024, 2023, 2022, 2021, 2020].reduce((s, y) => s + (r.seasons?.[y] || 0), 0)}</dd></div>`}
         ${pts != null ? `<div class="live"><dt>${YEAR}</dt><dd>${pts}</dd></div>` : ""}
       </dl>
-      ${compact ? "" : `<ul class="rbest">${r.best.slice(0, 2).map(e => `<li>${esc(e.label)}</li>`).join("")}</ul>`}
+      ${compact ? "" : `<div class="rcareer">${r.wins ? `<b>${r.wins}</b> victoire${r.wins > 1 ? "s" : ""}` : "Aucune victoire"}${r.podiums ? ` · <b>${r.podiums}</b> podium${r.podiums > 1 ? "s" : ""}` : ""} <span>depuis 2020</span></div>
+        <ul class="rbest">${r.best.slice(0, 2).map(e => `<li>${esc(e.label)}</li>`).join("") || `<li>${r.level === "PRT" ? "Équipe ProTeam" : r.level === "WT" ? "Équipe World Tour" : ""}</li>`}</ul>`}
       ${compact ? "" : inTeam ? `<button class="rbtn remove" data-remove="${esc(r.key)}">Retirer</button>`
         : canAdd ? `<button class="rbtn add" data-add="${esc(r.key)}">Ajouter · ${r.price}</button>`
         : `<button class="rbtn" disabled>${canAdd === false ? "Budget insuffisant" : "Équipe complète"}</button>`}
@@ -385,7 +461,89 @@ async function renderGame() {
 }
 async function refreshPlayers() {
   try { game.players = await Backend.list(); } catch (e) { game.players = []; }
+  try { game.groups = await Backend.groups(); game.groupErr = null; } catch (e) { game.groups = { groups: [], members: [] }; game.groupErr = e.message; }
   drawGame();
+}
+
+/* points de chaque joueur (saison jouée, ou simulation sur 2026 avant le départ) */
+function playerRows(started) {
+  return game.players.map(p => ({ p, s: started ? teamScore(p).total : 0, sim: simulate2026(p.riders || []) }))
+    .map(r => ({ ...r, v: started ? r.s : r.sim }))
+    .sort((a, b) => b.v - a.v || b.sim - a.sim || a.p.pseudo.localeCompare(b.p.pseudo));
+}
+const groupOf = id => { const G = game.groups; const gid = G?.members.find(m => m.user === id)?.group; return gid ? G.groups.find(g => g.id === gid) || null : null; };
+/* classement des groupes : moyenne des points de leurs joueurs (un grand groupe n'est pas avantagé) */
+function groupRows(rows) {
+  const G = game.groups || { groups: [], members: [] };
+  return G.groups.map(g => {
+    const ids = new Set(G.members.filter(m => m.group === g.id).map(m => m.user));
+    const mem = rows.filter(r => ids.has(r.p.id));
+    const total = mem.reduce((s, r) => s + r.v, 0);
+    const playing = mem.filter(r => r.p.riders?.length).length;   // un joueur sans coureurs ne fait pas baisser la moyenne
+    return { g, mem, total, avg: playing ? Math.round(total / playing) : 0 };
+  }).filter(r => r.mem.length).sort((a, b) => b.avg - a.avg || b.total - a.total || a.g.name.localeCompare(b.g.name));
+}
+function playerList(rows, m, started) {
+  return `<ol class="ranking">${rows.map(({ p, v }, i) => {
+    const g = groupOf(p.id);
+    return `
+    <li class="${game.me && p.id === game.me.id ? "me" : ""}">
+      <span class="pos">${i + 1}</span>
+      <div class="rk-main">
+        <b>${esc(p.pseudo)}</b>${g ? ` <span class="rk-group">${esc(g.name)}</span>` : ""}
+        <div class="rk-riders">${(p.riders || []).map(k => m.by.get(k)).filter(Boolean).map(r => `<span>${cflag(r.nat)}${esc(r.name.split(" ").slice(-1)[0])}</span>`).join("") || "<span>Pas encore de coureurs</span>"}</div>
+      </div>
+      <div class="rk-pts"><b>${v}</b><small>${started ? "pts" : "pts (simul. 2026)"}</small></div>
+    </li>`;
+  }).join("")}</ol>`;
+}
+function groupsHTML(m, started) {
+  const rows = playerRows(started);
+  const ranked = groupRows(rows);
+  const mine = groupOf(game.me.id);
+  const unit = started ? "pts" : "pts (simul. 2026)";
+  let panel;
+  if (game.groupErr) panel = `<div class="g-msg err">${esc(game.groupErr)}</div>`;
+  else if (mine) {
+    const r = ranked.find(x => x.g.id === mine.id);
+    const pos = ranked.indexOf(r) + 1;
+    panel = `
+      <div class="grp-mine">
+        <div class="grp-mine-head">
+          <div><div class="eyebrow">Mon groupe</div><h3>${esc(mine.name)}</h3>
+            <p class="hint">${pos}<sup>${pos === 1 ? "er" : "e"}</sup> sur ${ranked.length} groupe${ranked.length > 1 ? "s" : ""} · ${r.mem.length} joueur${r.mem.length > 1 ? "s" : ""} · moyenne <b>${r.avg}</b> ${unit}</p></div>
+          <button class="ghost" data-gleave>Quitter le groupe</button>
+        </div>
+        ${playerList(r.mem, m, started)}
+      </div>`;
+  } else {
+    const others = (game.groups?.groups || []).filter(g => ranked.some(r => r.g.id === g.id));
+    panel = `
+      <div class="grp-join">
+        <form id="grp-form" class="grp-create">
+          <label>Créer un groupe<input name="gname" required minlength="2" maxlength="30" placeholder="ex. Les copains du club"></label>
+          <button class="cta" type="submit" ${game.busy ? "disabled" : ""}>Créer et rejoindre</button>
+        </form>
+        ${others.length ? `<div class="grp-pick"><div class="mp-title">Ou rejoins un groupe existant</div>
+          <div class="grp-chips">${ranked.map(r => `<button class="chip" data-gjoin="${esc(r.g.id)}">${esc(r.g.name)} <small>${r.mem.length}</small></button>`).join("")}</div></div>` : ""}
+      </div>`;
+  }
+  return `
+    <div class="rank-head">
+      <div><h2>Groupes</h2><p class="hint">Joue avec tes amis, ton club ou ton bureau. Le classement individuel continue : le groupe ajoute un classement en plus. Un groupe est classé sur la <b>moyenne</b> des points de ses joueurs qui ont une équipe, pour qu'un grand groupe ne soit pas avantagé. Un joueur est dans un seul groupe à la fois.</p></div>
+      <button class="ghost" data-refresh>Mettre à jour</button>
+    </div>
+    ${panel}
+    <div class="section-title"><h2>Classement des groupes</h2></div>
+    ${ranked.length ? `<ol class="ranking grp-ranking">${ranked.map(({ g, mem, total, avg }, i) => `
+      <li class="${mine && g.id === mine.id ? "me" : ""}">
+        <span class="pos">${i + 1}</span>
+        <div class="rk-main">
+          <b>${esc(g.name)}</b>
+          <div class="rk-riders">${mem.map(r => `<span>${esc(r.p.pseudo)} · ${r.v}</span>`).join("")}</div>
+        </div>
+        <div class="rk-pts"><b>${avg}</b><small>moyenne · ${mem.length} joueur${mem.length > 1 ? "s" : ""} · total ${total}</small></div>
+      </li>`).join("")}</ol>` : `<div class="empty">Aucun groupe pour l'instant. Crée le premier !</div>`}`;
 }
 
 function drawGame() {
@@ -453,6 +611,7 @@ function drawGame() {
       <button class="tab ${game.tab === "team" ? "active" : ""}" data-gtab="team">Mon équipe</button>
       <button class="tab ${game.tab === "market" ? "active" : ""}" data-gtab="market">Marché des coureurs</button>
       <button class="tab ${game.tab === "rank" ? "active" : ""}" data-gtab="rank">Classement</button>
+      <button class="tab ${game.tab === "groups" ? "active" : ""}" data-gtab="groups">Groupes</button>
       <button class="tab ${game.tab === "rules" ? "active" : ""}" data-gtab="rules">Règles & barème</button>
       <span class="grow"></span>
       <span class="who">${esc(game.me.pseudo)} · <button class="linkbtn" data-logout>Déconnexion</button></span>
@@ -489,21 +648,26 @@ function drawGame() {
         : `<div class="empty">Tes coureurs n'ont pas encore marqué de points cette saison.</div>`}` : ""}`;
   } else if (game.tab === "market") {
     const q = keyOf(game.q);
-    let list = m.list.filter(r => (game.tier === "all" || r.tier.id === game.tier) && (!game.be || r.nat === "BEL") && (!q || keyOf(r.name + " " + teamName(r.team)).includes(q)));
+    let list = m.list.filter(r => (game.tier === "all" || r.tier.id === game.tier) && (!game.be || r.nat === "BEL") && (!game.young || (r.age != null && r.age <= 23)) && (!q || keyOf(r.name + " " + riderTeam(r)).includes(q)));
     if (game.sort === "pts") list = [...list].sort((a, b) => b.pts - a.pts);
     if (game.sort === "value") list = [...list].sort((a, b) => b.pts / b.price - a.pts / a.price);
     if (game.sort === "cheap") list = [...list].sort((a, b) => a.price - b.price || b.pts - a.pts);
+    if (game.sort === "young") list = [...list].sort((a, b) => (a.age ?? 99) - (b.age ?? 99) || b.price - a.price);
+    if (game.sort === "wins") list = [...list].sort((a, b) => b.wins - a.wins || b.price - a.price);
     const shown = list.slice(0, 120);
     body = budgetBar + `
       <div class="toolbar">
         <input class="search" id="g-q" type="search" placeholder="Coureur ou équipe…" value="${esc(game.q)}">
         <button class="chip be ${game.be ? "on" : ""}" data-gbe>${flagImg("be")} Belges</button>
+        <button class="chip ${game.young ? "on" : ""}" data-gyoung>Jeunes (23 ans et moins)</button>
         ${[["all", "Tous"], ...TIERS.map(t => [t.id, t.name])].map(([id, n]) => `<button class="chip ${game.tier === id ? "on" : ""}" data-gtier="${id}">${n}</button>`).join("")}
         <select id="g-sort" class="select" aria-label="Trier">
           <option value="price" ${game.sort === "price" ? "selected" : ""}>Prix ↓</option>
           <option value="cheap" ${game.sort === "cheap" ? "selected" : ""}>Prix ↑</option>
           <option value="pts" ${game.sort === "pts" ? "selected" : ""}>Points 2026 ↓</option>
           <option value="value" ${game.sort === "value" ? "selected" : ""}>Bonnes affaires</option>
+          <option value="wins" ${game.sort === "wins" ? "selected" : ""}>Victoires depuis 2020</option>
+          <option value="young" ${game.sort === "young" ? "selected" : ""}>Plus jeunes</option>
         </select>
       </div>
       ${!ph.open ? `<div class="g-msg">${esc(ph.label)}. Tu peux consulter le marché, mais pas modifier ton équipe.</div>` : ""}
@@ -512,26 +676,19 @@ function drawGame() {
         const canAdd = ph.open && game.draft.length < SIZE ? (r.price <= left ? true : false) : null;
         return riderCard(r, { inTeam: inTeam && ph.open, canAdd: inTeam ? null : canAdd });
       }).join("")}</div>
-      <p class="hint center">${list.length} coureurs${list.length > shown.length ? ` · ${shown.length} affichés, affine ta recherche` : ""}. Le prix dépend des résultats de 2026, 2025 et 2024 (la saison la plus récente compte le plus).</p>`;
+      <p class="hint center">${list.length} coureurs${list.length > shown.length ? ` · ${shown.length} affichés, affine ta recherche` : ""}. Le prix dépend des résultats de 2020 à 2026 (la saison la plus récente compte le plus), de l'âge et de la forme du moment.</p>`;
   } else if (game.tab === "rank") {
-    const rows = game.players.map(p => ({ p, s: started ? teamScore(p).total : 0, sim: simulate2026(p.riders || []) }))
-      .sort((a, b) => b.s - a.s || b.sim - a.sim || a.p.pseudo.localeCompare(b.p.pseudo));
+    const rows = playerRows(started);
     body = `
       <div class="rank-head">
-        <div><h2>Classement ${YEAR}</h2><p class="hint">${started ? "Points de la saison, mis à jour avec les résultats lus sur Wikipédia." : `La saison n'a pas commencé : en attendant, les équipes sont classées sur ce qu'elles auraient marqué en 2026.`}</p></div>
+        <div><h2>Classement ${YEAR}</h2><p class="hint">${started ? "Points de la saison, mis à jour avec les résultats lus sur Wikipédia." : `La saison n'a pas commencé : en attendant, les équipes sont classées sur ce qu'elles auraient marqué en 2026.`} Le classement des groupes est dans l'onglet <button class="linkbtn" data-gtab="groups">Groupes</button>.</p></div>
         <button class="ghost" data-refresh>Mettre à jour</button>
       </div>
-      ${rows.length ? `<ol class="ranking">${rows.map(({ p, s, sim }, i) => `
-        <li class="${game.me && p.id === game.me.id ? "me" : ""}">
-          <span class="pos">${i + 1}</span>
-          <div class="rk-main">
-            <b>${esc(p.pseudo)}</b>
-            <div class="rk-riders">${(p.riders || []).map(k => m.by.get(k)).filter(Boolean).map(r => `<span>${cflag(r.nat)}${esc(r.name.split(" ").slice(-1)[0])}</span>`).join("") || "<span>Pas encore de coureurs</span>"}</div>
-          </div>
-          <div class="rk-pts"><b>${started ? s : sim}</b><small>${started ? "pts" : "pts (simul. 2026)"}</small></div>
-        </li>`).join("")}</ol>` : `<div class="empty">Personne n'a encore créé d'équipe. Sois le premier !</div>`}
+      ${rows.length ? playerList(rows, m, started) : `<div class="empty">Personne n'a encore créé d'équipe. Sois le premier !</div>`}
       <div id="live-progress" class="hint center"></div>
       ${LIVE ? `<p class="hint center">Résultats ${YEAR} lus le ${new Date(LIVE.loadedAt).toLocaleString("fr-BE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · ${LIVE_EVENTS.length} résultats comptés.</p>` : ""}`;
+  } else if (game.tab === "groups") {
+    body = groupsHTML(m, started);
   } else {
     body = rulesHTML();
   }
@@ -545,7 +702,7 @@ function rulesHTML() {
     <section class="rules">
       <div class="section-title"><h2>Règles</h2></div>
       <ul class="rule-list">
-        <li><b>${BUDGET} points</b> de budget fictif et <b>${SIZE} coureurs</b> maximum. Le prix d'un coureur dépend de ses points sur 3 saisons : 2026 compte en entier, 2025 à 60 % et 2024 à 35 %.</li>
+        <li><b>${BUDGET} points</b> de budget fictif et <b>${SIZE} coureurs</b> maximum. Le prix d'un coureur dépend de ses points sur 7 saisons : 2026 compte en entier, puis 2025 à 70 %, 2024 à 50 %, 2023 à 35 %, 2022 à 25 %, 2021 à 15 % et 2020 à 10 %. Il est ensuite ajusté selon l'<b>âge</b> (+15 % jusqu'à 22 ans, +8 % jusqu'à 25 ans, −8 % à 32-33 ans, −18 % à 34-35 ans, −28 % au-delà) et la <b>forme</b> (jusqu'à ±10 % selon que 2026 est meilleure ou moins bonne que les deux saisons d'avant). Tous les coureurs des équipes World Tour et ProTeam sont au marché, à partir de 3 points.</li>
         <li>Tu peux changer ton équipe librement jusqu'au <b>${LOCK.toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}</b>.</li>
         <li>Ensuite, ${WINDOWS.length} fenêtre${WINDOWS.length > 1 ? "s" : ""} de transferts : ${WINDOWS.map(w => `<b>${esc(w.name)}</b> (${w.start.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })} – ${w.end.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}, ${w.max} transferts)`).join(", ")}.</li>
         <li>Un coureur ne rapporte que les points marqués <b>pendant qu'il est dans ton équipe</b>.</li>
@@ -597,6 +754,16 @@ async function onGameClick(e) {
   if (rm) { game.draft = game.draft.filter(k => k !== rm.dataset.remove); game.msg = null; drawGame(); return; }
   if (t.closest("[data-reset]")) { game.draft = [...game.me.riders]; game.msg = null; drawGame(); return; }
   if (t.closest("[data-gbe]")) { game.be = !game.be; drawGame(); return; }
+  if (t.closest("[data-gyoung]")) { game.young = !game.young; drawGame(); return; }
+  const join = t.closest("[data-gjoin]");
+  if (join || t.closest("[data-gleave]")) {
+    game.busy = true; game.msg = null;
+    try {
+      if (join) { await Backend.joinGroup(game.me, join.dataset.gjoin); game.msg = { t: "Tu as rejoint le groupe." }; }
+      else { await Backend.leaveGroup(game.me); game.msg = { t: "Tu as quitté le groupe." }; }
+    } catch (err) { game.msg = { err: true, t: err.message }; }
+    game.busy = false; await refreshPlayers(); return;
+  }
   const tier = t.closest("[data-gtier]");
   if (tier) { game.tier = tier.dataset.gtier; drawGame(); return; }
   if (t.closest("[data-logout]")) { await Backend.logout(); window.checkAdmin?.(); game.me = null; game.draft = []; game.msg = null; drawGame(); return; }
@@ -630,6 +797,12 @@ async function onGameSubmit(e) {
   e.preventDefault();
   const f = new FormData(e.target);
   const v = Object.fromEntries(f.entries());
+  if (e.target.id === "grp-form") {
+    game.busy = true; game.msg = null;
+    try { await Backend.createGroup(game.me, v.gname.trim()); game.msg = { t: `Groupe « ${v.gname.trim()} » créé.` }; }
+    catch (err) { game.msg = { err: true, t: err.message }; }
+    game.busy = false; await refreshPlayers(); return;
+  }
   game.busy = true; game.msg = null; drawGame();
   try {
     game.me = game.authMode === "signup" ? await Backend.signup(v) : await Backend.login(v);

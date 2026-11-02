@@ -48,7 +48,15 @@ Chaque joueur a besoin du dossier `sport-app` **avec ton `config.js` rempli**. D
   `python -m http.server 8780 --directory sport-app`, puis ouvre <http://localhost:8780>.
 - **Le mettre sur un site gratuit** (GitHub Pages, Netlify…). Tout le monde ouvre alors la même adresse, sans rien installer. Je peux t'aider à le faire.
 
+## 6. Activer les groupes
+
+Les joueurs peuvent se regrouper (amis, club, bureau) et avoir un classement des groupes en plus du classement individuel.
+Dans Supabase, **SQL Editor → New query**, colle tout le fichier `supabase-groups.sql`, puis clique sur **Run**.
+Tant que ce n'est pas fait, l'onglet « Groupes » affiche que les groupes ne sont pas encore activés.
+
 ## Bon à savoir
+
+- Les coureurs du marché viennent de `cycling-riders.json` (effectifs World Tour et ProTeam, avec dates de naissance) : `node tools/build-riders.mjs` le met à jour. Les résultats des saisons passées sont dans `cycling-history.json` : `node tools/build-cycling-history.mjs 2025 2024 2023 2022 2021 2020`.
 
 - Les dates (fin des inscriptions le 19 janvier 2027, fenêtres de transferts) sont dans `config.js` **et** dans `supabase-setup.sql`. Si tu les changes, change-les aux deux endroits, puis relance le script SQL.
 - Les résultats 2027 sont lus automatiquement sur Wikipédia (pages « 2027 UCI World Tour », « 2027 UCI ProSeries », « 2027 UCI Europe Tour », Mondiaux et championnats d'Europe). Chaque appli recalcule les points toutes les 3 heures, ou tout de suite avec le bouton **Mettre à jour** du classement.

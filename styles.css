@@ -554,6 +554,7 @@ table.std { width: 100%; border-collapse: collapse; font-variant-numeric: tabula
 .rcard.tier-star { --t1: #9fb8ff; --t2: #4a5fc1; }
 .rcard.tier-pro { --t1: #e09a5f; --t2: #9c5a24; }
 .rcard.tier-rookie { --t1: #3ddc84; --t2: #1f7a52; }
+.rcard.tier-domestique { --t1: #8a94a8; --t2: #4b5263; }
 .rcard.picked { box-shadow: 0 0 0 2px var(--accent); }
 .rcard header { display: flex; align-items: center; justify-content: space-between; }
 .tier { font-size: 10px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; color: #10131c; background: var(--t1, #3ddc84); }
@@ -572,6 +573,9 @@ table.std { width: 100%; border-collapse: collapse; font-variant-numeric: tabula
 .rstats dt { font-size: 9.5px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); }
 .rstats dd { margin: 0; font: 800 18px var(--display); font-variant-numeric: tabular-nums; }
 .rstats .live dd { color: var(--accent); }
+.rcareer { font-size: 11.5px; color: var(--muted); }
+.rcareer b { color: var(--text, inherit); font-weight: 800; }
+.rcareer span { color: var(--dim); }
 .rbest { list-style: none; margin: 2px 0 0; padding: 0; font-size: 11px; color: var(--muted); display: grid; gap: 2px; min-height: 30px; }
 .rbest li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rbtn { margin-top: auto; padding: 9px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg-2); color: var(--muted); font-weight: 700; font-size: 13px; }
@@ -1495,3 +1499,18 @@ body::before { opacity: .04; }
 .pf-official img { display: block; width: 100%; height: auto; }
 .sd-km { margin-left: auto; font: 800 12px var(--display); letter-spacing: .5px; color: var(--velo); }
 .pf-none { padding: 12px 14px; border-radius: 10px; background: var(--panel); border: 1px dashed var(--line); }
+
+/* groupes */
+.rk-group { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 6px; font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft); vertical-align: 2px; }
+.grp-mine, .grp-join { padding: 16px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); margin-bottom: 22px; }
+.grp-mine { border-color: var(--accent); }
+.grp-mine-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.grp-mine-head h3 { margin: 2px 0 4px; font: 800 24px var(--display); }
+.grp-mine .ranking li { background: var(--bg-2); }
+.grp-create { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.grp-create label { display: grid; gap: 6px; flex: 1 1 240px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.grp-create input { padding: 11px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg-2); color: inherit; font: inherit; }
+.grp-pick { margin-top: 16px; }
+.grp-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.grp-chips small { margin-left: 4px; color: var(--dim); }
+.grp-ranking .rk-pts small { white-space: nowrap; }
