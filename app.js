@@ -117,6 +117,11 @@ const ICONS = {
   sound: '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
   mute: '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
   online: '<circle cx="12" cy="12" r="8.5"/><path d="M8 12l2.6 2.6L16.5 9"/>',
+  up: '<path d="M4 17l5.5-5.5 3.5 3.5L20 8"/><path d="M14.5 8H20v5.5"/>',
+  down: '<path d="M4 7l5.5 5.5 3.5-3.5L20 16"/><path d="M14.5 16H20v-5.5"/>',
+  leaf: '<path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14"/><path d="M5 19l7-7"/>',
+  tag: '<path d="M3.5 12.5V4.5h8l9 9-8 8-9-9z"/><circle cx="8" cy="8.5" r="1.3"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18"/>',
 };
 const ico = (name, cls = "i") => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ""}</svg>`;
 window.ico = ico;
@@ -957,7 +962,7 @@ function drawRows() {
       const future = !r.winner && !r.status?.includes("Annul") && r.range && r.range.end >= today;
       const cancel = r.status === "Annulée";
       const w = r.winner
-        ? `<div class="rw">${r.winner.nat ? cflag(r.winner.nat) : "👥"} ${esc(r.winner.nat ? r.winner.name : teamName(r.winner.name.replace("Équipe ", "")) + " (équipe)")}</div>`
+        ? `<div class="rw">${r.winner.nat ? cflag(r.winner.nat) : ico("users")} ${esc(r.winner.nat ? r.winner.name : teamName(r.winner.name.replace("Équipe ", "")) + " (équipe)")}</div>`
         : `<span class="rt">${cancel ? "Annulée" : future ? "À venir" : "—"}</span>`;
       return `
         <tr class="${future ? "future" : ""} ${cancel ? "cancel" : ""} ${r.stages ? "has-stages" : ""}" ${r.stages ? `data-race="${cyc.tab}:${list.indexOf(r)}"` : ""}>
@@ -985,7 +990,7 @@ const JERSEY_C = { "Général": "#f5c518", "Points": "#2a9d47", "Montagne": "#e6
 const riderName = n => n.startsWith("team:") ? teamName(n.slice(5)) : n;
 function stageWinner(w) {
   if (!w) return `<span class="rt">—</span>`;
-  if (w.team) return `👥 <span>${esc(teamName(w.name))}</span>`;
+  if (w.team) return `${ico("users")} <span>${esc(teamName(w.name))}</span>`;
   return `${w.nat ? cflag(w.nat) : ""}<span>${esc(w.name)}</span>`;
 }
 function openRace(key) {
@@ -1002,7 +1007,7 @@ function openRace(key) {
   const podium = [r.winner, r.second, r.third].filter(Boolean);
   const html = `
     <div class="modal-card" role="dialog" aria-modal="true" style="--rc:${color}">
-      <button class="modal-x" data-close aria-label="Fermer">✕</button>
+      <button class="modal-x" data-close aria-label="Fermer">${ico("close")}</button>
       <div class="modal-head">
         <div class="mh-flag">${cflag(r.country, "flag lg")}</div>
         <div>
@@ -1436,7 +1441,7 @@ function openMatch(league, id) {
     });
     document.body.appendChild(m);
   }
-  m.innerHTML = `<div class="modal-card mc-card"><button class="modal-x" data-mclose aria-label="Fermer">✕</button>${loadingHTML("Chargement de la fiche du match…")}</div>`;
+  m.innerHTML = `<div class="modal-card mc-card"><button class="modal-x" data-mclose aria-label="Fermer">${ico("close")}</button>${loadingHTML("Chargement de la fiche du match…")}</div>`;
   m.classList.add("show");
   document.body.style.overflow = "hidden";
   loadMatch();
@@ -1462,7 +1467,7 @@ async function loadMatch() {
     else if (st === "pre") mc.timer = setTimeout(loadMatch, 120000);   // avant le match : les compos peuvent tomber
   } catch {
     if (mc.id !== id) return;
-    $("#match-modal .mc-card").innerHTML = `<button class="modal-x" data-mclose aria-label="Fermer">✕</button><div class="empty">Impossible de charger ce match. Réessaie dans un instant.</div>`;
+    $("#match-modal .mc-card").innerHTML = `<button class="modal-x" data-mclose aria-label="Fermer">${ico("close")}</button><div class="empty">Impossible de charger ce match. Réessaie dans un instant.</div>`;
     mc.timer = setTimeout(loadMatch, 30000);
   }
 }
@@ -1639,7 +1644,7 @@ function drawMatch() {
   else body = eventsHTML(keyEv, H, A);
 
   const card = $("#match-modal .mc-card");
-  if (card) card.innerHTML = `<button class="modal-x" data-mclose aria-label="Fermer">✕</button>${head}<div class="mc-body">${body}</div>`;
+  if (card) card.innerHTML = `<button class="modal-x" data-mclose aria-label="Fermer">${ico("close")}</button>${head}<div class="mc-body">${body}</div>`;
 }
 const shortName = n => { const p = String(n).split(" "); return p.length > 1 ? p[0][0] + ". " + p.slice(1).join(" ") : n; };
 
@@ -1823,7 +1828,7 @@ function eventsHTML(keyEv, H, A) {
 const GOAL_LEAGUES = ["esp.1"];
 const clipKind = h => /spectacular|stunning|incredible|great goal|wonder|brilliant|amazing|screamer|golazo/i.test(h) ? "top"
   : /game highlights/i.test(h) ? "hl" : /save/i.test(h) ? "save" : /scores|goal|back of the net|penalty/i.test(h) ? "goal" : "other";
-const CLIP_LABEL = { top: "But spectaculaire", goal: "But", hl: "Résumé du match", save: "Arrêt", other: "🎥 Vidéo" };
+const CLIP_LABEL = { top: "But spectaculaire", goal: "But", hl: "Résumé du match", save: "Arrêt", other: "Vidéo" };
 function clipFrom(v, ev, slug) {
   const src = v.links?.source?.HD?.href || v.links?.source?.href;
   if (!src) return null;
@@ -2061,7 +2066,7 @@ function drawInstall() {
     <p class="hint">Sur iPhone, l'installation passe par Safari. Avec Chrome, le bouton Partager ${ICON_SHARE} est en haut à droite, puis « Ajouter à l'écran d'accueil ».</p>`;
   $("#install-modal").innerHTML = `
     <div class="modal-card install-card" role="dialog" aria-modal="true">
-      <button class="modal-x" data-iclose aria-label="Fermer">✕</button>
+      <button class="modal-x" data-iclose aria-label="Fermer">${ico("close")}</button>
       <div class="install-head">
         <img src="icons/icon-192.png" alt="">
         <div><h2>Installer Arena 360</h2><p>Ajoute l'appli sur ton écran d'accueil : elle s'ouvre en plein écran, comme une vraie application.</p></div>
@@ -2140,7 +2145,7 @@ async function renderBelges() {
         const p = byId.get(r.playerId), m = r.match;
         return `<button class="bel-goal" data-bel-match="${esc(r.league)}|${esc(r.eventId)}">
           ${belAvatar(p, "sm")}
-          <div class="bg-main"><b>${esc(p.name)}</b><span>${r.type === "assists" ? `🅰️ Passe D pour ${esc(r.scorer || "")} · ` : "⚽ "}${esc(r.minute)}${r.pen ? " · pénalty" : ""} · ${esc(r.comp)}</span></div>
+          <div class="bg-main"><b>${esc(p.name)}</b><span>${r.type === "assists" ? `${ico("assist")} Passe D pour ${esc(r.scorer || "")} · ` : "⚽ "}${esc(r.minute)}${r.pen ? " · pénalty" : ""} · ${esc(r.comp)}</span></div>
           <div class="bg-match"><img src="${esc(m.homeLogo || "")}" alt=""><span>${esc(m.home)}</span><b>${esc(m.hs)}-${esc(m.as)}</b><span>${esc(m.away)}</span><img src="${esc(m.awayLogo || "")}" alt=""></div>
           <time>${new Date(r.date).toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" })}</time>
         </button>`;
@@ -2162,7 +2167,7 @@ async function renderBelges() {
             <b>${esc(x.p.name)}</b>
             <span class="bel-club">${x.p.teamLogo ? `<img src="${esc(x.p.teamLogo)}" alt="">` : ""}${esc(x.p.team)}<em>${esc(x.p.leagueName)}</em></span>
             <span class="bel-comps">${isWeek
-              ? (x.p.events || []).filter(ev => bel.kind === "all" || slugKind(ev.league) === bel.kind).map(ev => `<i class="k-${slugKind(ev.league)} ev" data-bel-match="${esc(ev.league)}|${esc(ev.eventId)}">${ev.type === "goals" ? "⚽" : "🅰️"} ${esc(ev.minute)} · ${esc(ev.match.home)} ${esc(ev.match.hs)}-${esc(ev.match.as)} ${esc(ev.match.away)}</i>`).join("")
+              ? (x.p.events || []).filter(ev => bel.kind === "all" || slugKind(ev.league) === bel.kind).map(ev => `<i class="k-${slugKind(ev.league)} ev" data-bel-match="${esc(ev.league)}|${esc(ev.eventId)}">${ico(ev.type === "goals" ? "ball" : "assist")} ${esc(ev.minute)} · ${esc(ev.match.home)} ${esc(ev.match.hs)}-${esc(ev.match.as)} ${esc(ev.match.away)}</i>`).join("")
               : comps.map(c => `<i class="k-${c.kind}">${esc(c.name)} · ${c.goals ? c.goals + " but" + (c.goals > 1 ? "s" : "") : ""}${c.goals && c.assists ? ", " : ""}${c.assists ? c.assists + " passe" + (c.assists > 1 ? "s" : "") + " D" : ""}</i>`).join("")}</span>
           </div>
           <div class="bel-nums">
@@ -2345,7 +2350,7 @@ async function renderUefa() {
     const upd = new Date(d.updated).toLocaleString("fr-BE", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
     main.innerHTML = `
       <section class="bel-hero uefa-hero">
-        <div class="uefa-star" aria-hidden="true">★</div>
+        <div class="uefa-star" aria-hidden="true">${ico("trophy")}</div>
         <div class="bel-hero-text">
           <div class="eyebrow">Saison ${uefaSeason(cur)} · classement officiel UEFA</div>
           <h1>Coefficients UEFA</h1>
@@ -2404,7 +2409,7 @@ function openSheet(html) {
     });
     document.body.appendChild(m);
   }
-  m.innerHTML = `<div class="modal-card sheet-card" role="dialog" aria-modal="true"><button class="modal-x" data-sclose aria-label="Fermer">✕</button><div class="sheet-body">${html}</div></div>`;
+  m.innerHTML = `<div class="modal-card sheet-card" role="dialog" aria-modal="true"><button class="modal-x" data-sclose aria-label="Fermer">${ico("close")}</button><div class="sheet-body">${html}</div></div>`;
   m.classList.add("show");
   m.scrollTop = 0;
   document.body.style.overflow = "hidden";

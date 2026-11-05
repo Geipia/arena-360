@@ -177,3 +177,141 @@ body::before { display: none !important; }
 .bel-flag { height: 72px !important; }
 .bel-flag i { border-radius: 2px !important; }
 .bel-hero h1, .hero h1, .g-hero h1 { letter-spacing: 0 !important; }
+
+/* =====================================================================
+   HARMONIE : toutes les pages parlent la même langue que l'accueil
+   (en-tête de journal, cartes plates, une seule famille de boutons)
+   ===================================================================== */
+
+/* --- en-têtes de page : plus de grand bloc coloré, une ligne de journal --- */
+.hero, .g-hero, .bel-hero, .uefa-hero {
+  background: transparent !important; border: 0 !important; border-bottom: 1px solid var(--line) !important;
+  border-radius: 0 !important; clip-path: none !important; box-shadow: none !important;
+  padding: 4px 0 22px !important; margin: 0 0 22px !important; overflow: visible !important;
+}
+.hero h1, .g-hero h1, .bel-hero h1 {
+  margin: 6px 0 10px !important; font: 800 44px/1 var(--display) !important; text-transform: uppercase !important; color: var(--chalk) !important;
+}
+.hero h1 em { color: inherit !important; }
+.hero p, .g-hero p, .bel-hero p { font: 400 18px/1.45 var(--serif) !important; color: #c9cfd8 !important; max-width: 680px !important; }
+.hero p b, .g-hero p b, .bel-hero p b { color: var(--text); font-weight: 600; }
+.eyebrow, .bel-hero .eyebrow, .uefa-hero .eyebrow { font: 700 12px var(--body) !important; letter-spacing: 1.8px !important; text-transform: uppercase; color: var(--accent) !important; }
+
+/* chiffres clés : posés comme des chiffres de journal, sans néon */
+.hero .hero-stats { gap: 34px !important; margin-top: 18px !important; }
+.hero .hero-stats b, .bel-kpis b, .countdown b {
+  font: 800 38px/1 var(--display) !important; color: var(--chalk) !important; text-shadow: none !important;
+}
+.hero .hero-stats div:first-child b, .bel-kpis div:first-child b, .countdown b { color: var(--accent) !important; }
+.uefa-hero .bel-kpis div b { color: var(--chalk) !important; }
+.uefa-hero .bel-kpis div:first-child b { color: var(--accent) !important; }
+.hero .hero-stats span, .bel-kpis span, .countdown span { font: 600 12px var(--body) !important; letter-spacing: .4px !important; text-transform: none !important; color: var(--muted) !important; }
+.bel-kpis { gap: 26px !important; }
+.bel-kpis div { text-align: right !important; }
+.bel-hero { grid-template-columns: auto minmax(0, 1fr) auto !important; align-items: end !important; }
+.bel-flag { height: 56px !important; align-self: start; margin-top: 8px; }
+.bel-flag i { width: 14px !important; }
+.uefa-star { width: 52px !important; height: 52px !important; font-size: 0 !important; border-radius: 12px !important; background: transparent !important;
+  border: 1px solid var(--line) !important; text-shadow: none !important; color: var(--accent) !important; align-self: start; margin-top: 8px; }
+.uefa-star .i { width: 26px; height: 26px; }
+.g-hero { align-items: end !important; }
+.g-hero-side { gap: 8px !important; }
+.phase { border-radius: 999px !important; padding: 5px 12px !important; }
+
+/* --- titres de section : une ligne fine, pas de barre penchée --- */
+.section-title { align-items: center !important; gap: 14px !important; margin: 34px 0 14px !important; }
+.section-title h2 { font: 800 22px/1 var(--display) !important; letter-spacing: .6px !important; text-transform: uppercase; color: var(--chalk) !important; }
+.section-title h2::before { display: none !important; }
+.section-title::after { content: ""; flex: 1; height: 1px; background: var(--line); order: 3; }
+.section-title span { font: italic 400 15px var(--serif) !important; color: var(--muted) !important; order: 2; }
+.day-title { font: 700 12px var(--body) !important; letter-spacing: 1.6px !important; text-transform: uppercase; color: var(--muted) !important; }
+.day-title::before { display: none !important; }
+.mp-title, .pm-title { font: 700 11px var(--body) !important; letter-spacing: 1.6px !important; text-transform: uppercase; color: var(--dim) !important; }
+
+/* --- cartes : toutes plates, même fond, même bord --- */
+.gt-card, .mon-card, .champ-card, .rcard, .trend, .auth-card, .mpanel, .nt-card, .tcard, .slot, .g-msg, .ps-hero {
+  background: var(--panel) !important; border: 1px solid var(--line) !important; border-radius: var(--radius) !important;
+  clip-path: none !important; box-shadow: none !important;
+}
+.gt-card::before { height: 3px !important; }
+.champ-card.rainbow::before, .champ-card.euro::before { height: 3px !important; }
+.gt-card .race, .champ-card .t, .mon-card .date { font: 700 11px var(--body) !important; letter-spacing: 1.4px !important; text-transform: uppercase; color: var(--muted) !important; }
+.gt-card .winner { font: 800 24px/1.05 var(--display) !important; text-transform: uppercase; color: var(--chalk); }
+.mon-card .race, .champ-card .e { font: 800 17px/1.1 var(--display) !important; text-transform: uppercase; letter-spacing: .4px !important; color: var(--chalk); }
+.leader .bar i { background: var(--accent) !important; }
+.b-track i { background: var(--accent) !important; }
+.champion { background: var(--panel) !important; border-color: var(--line) !important; box-shadow: inset 3px 0 0 var(--velo); }
+
+/* cartes coureurs / équipes du jeu : la couleur du niveau reste, mais en filet, pas en dégradé */
+.rcard { border-top: 3px solid var(--t1) !important; transition: border-color .15s !important; }
+.rcard:hover { transform: none !important; box-shadow: none !important; border-color: color-mix(in srgb, var(--t1) 55%, var(--line)) !important; }
+.rcard.picked { box-shadow: 0 0 0 2px var(--accent) !important; }
+.rcard .mono, .rs-card .mono { background: var(--bg-2) !important; border-radius: 8px !important; }
+.rcard .mono span, .rs-card .mono span { color: var(--muted) !important; font-weight: 800 !important; }
+.rcard h4 { font: 800 18px/1.05 var(--display) !important; color: var(--chalk); }
+.tier, .tier-legend .tier, .tier.tier-legend { background: transparent !important; color: var(--t1, var(--accent)) !important; border: 1px solid currentColor; border-radius: 4px !important; transform: none !important; }
+.rstats div { background: var(--bg-2) !important; border-radius: 6px !important; }
+.ranking li.me, .ts-table tr.me, .ts-table tr.me td, .nt-status.on, .motm, .tl-row.goal, .ps-kpis .hl {
+  background: var(--accent-soft) !important;
+}
+
+/* --- Nos Belges : une liste de résultats, pas des cartes empilées --- */
+.bel-list { gap: 0 !important; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.bel-row, .bel-row.top, .bel-row.top2, .bel-row.top3 {
+  background: transparent !important; border: 0 !important; border-bottom: 1px solid var(--line-soft) !important; border-radius: 0 !important; padding: 12px 18px !important;
+}
+.bel-row:last-child { border-bottom: 0 !important; }
+.bel-row:hover { background: color-mix(in srgb, var(--accent) 6%, transparent) !important; }
+.bel-rank { font: 800 22px var(--display) !important; }
+.bel-photo { border-width: 1px !important; }
+.bel-photo.mono { color: var(--muted) !important; font-weight: 800 !important; }
+.bel-id b { font: 800 19px/1.1 var(--display) !important; letter-spacing: .3px; color: var(--chalk); }
+.bel-nums b { font-weight: 800 !important; }
+.bel-comps i, .bel-comps .ev { border-radius: 999px !important; }
+.bel-comps .i { margin-right: 3px; }
+
+/* --- boutons : une seule famille, en pilule, sans majuscules criées --- */
+.chip, .ghost, .rbtn, .cta, .admin-btn, .install-btn, .follow-btn {
+  border-radius: 999px !important; transform: none !important; box-shadow: none !important; clip-path: none !important;
+  font-family: var(--body) !important; text-transform: none !important; letter-spacing: 0 !important;
+}
+.chip > *, .cta > *, .admin-btn > *, .install-btn > * { transform: none !important; }
+.chip { font-weight: 600 !important; font-size: 13px !important; }
+.chip.on { box-shadow: none !important; }
+.cta { font-weight: 800 !important; font-size: 15px !important; padding: 12px 22px !important; }
+.rbtn { font-weight: 700 !important; font-size: 14px !important; }
+.auth-tabs { border-radius: 999px !important; background: var(--bg-2) !important; padding: 4px !important; }
+.auth-tabs button { border-radius: 999px !important; font: 700 14px var(--body) !important; letter-spacing: 0 !important; text-transform: none !important; }
+#auth-form input, .select, .search, input[type="search"] { border-radius: 8px !important; }
+
+/* fiches (match, coureur, joueur, club) */
+.modal-head h2 { font: 800 36px/1 var(--display) !important; color: var(--chalk); }
+.modal-x { display: grid !important; place-items: center; }
+.modal-x .i { width: 18px; height: 18px; }
+.mc-score span { border-radius: 8px !important; }
+.pf-wrap { background: var(--bg-2) !important; }
+.tform i, .pm-form i, .l5 i, .sd-cat, .istep, .st-bar i, .pm-bar i { transform: none !important; border-radius: 4px; }
+.rs-badge .i { margin-right: 4px; }
+.trend .mp-title .i { margin-right: 6px; color: var(--accent); }
+
+/* chiffres clés sous le texte, comme une ligne de stats ; interrupteurs à la taille de leur contenu */
+.bel-hero { grid-template-columns: auto minmax(0, 1fr) !important; align-items: start !important; }
+.bel-hero .bel-kpis { grid-column: 2; justify-content: flex-start; margin-top: 4px; }
+.bel-kpis div { text-align: left !important; }
+.bel-kpis div span { display: block; margin-top: 4px; }
+.gmode { display: inline-flex !important; width: auto !important; max-width: 100%; margin: 0 0 14px !important; }
+.gmode button { flex: none !important; padding: 8px 18px !important; min-width: 0 !important; width: auto !important; background: transparent; border: 0 !important; color: var(--muted); }
+.bel-period button.on { background: var(--accent) !important; color: var(--on-accent) !important; box-shadow: none !important; }
+
+@media (max-width: 760px) {
+  .bel-hero { grid-template-columns: auto minmax(0, 1fr) !important; }
+  .bel-hero .bel-kpis { grid-column: 1 / -1; justify-content: flex-start; }
+  .bel-kpis div { text-align: left !important; }
+  .g-hero { grid-template-columns: 1fr !important; }
+  .g-hero-side { justify-items: start !important; text-align: left !important; }
+  .hero h1, .g-hero h1, .bel-hero h1 { font-size: 34px !important; }
+  .hero p, .g-hero p, .bel-hero p { font-size: 16px !important; }
+  .hero .hero-stats { gap: 20px !important; }
+  .hero .hero-stats b, .bel-kpis b, .countdown b { font-size: 30px !important; }
+  .bel-row, .bel-row.top, .bel-row.top2, .bel-row.top3 { padding: 10px 12px !important; }
+}

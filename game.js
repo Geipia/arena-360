@@ -849,10 +849,10 @@ function trendsHTML(m) {
   const chosen = game.players.some(p => (p.riders || []).length)
     ? m.list.map(r => ({ r, v: ownership(r.key) })).filter(x => x.v).sort((a, b) => b.v - a.v).slice(0, 5).map(x => [x.r, `${x.v} %`]) : [];
   const blocks = [
-    ["⭐ Les plus choisis", chosen],
-    ["💎 Bonnes affaires (40 ou moins)", m.list.filter(r => r.pts >= 100 && r.price <= 40).sort((a, b) => b.value - a.value).slice(0, 5).map(r => [r, `${r.pts} pts 2026 · ${r.price}`])],
-    ["🔥 En forme", m.list.filter(r => r.price >= 10).sort((a, b) => (b.seasons[m.years[0]] - (b.seasons[m.years[1]] || 0)) - (a.seasons[m.years[0]] - (a.seasons[m.years[1]] || 0))).slice(0, 5).map(r => [r, `+${r.seasons[m.years[0]] - (r.seasons[m.years[1]] || 0)} pts sur 2025`])],
-    ["🌱 Jeunes talents", m.list.filter(r => r.age != null && r.age <= 23).slice(0, 5).map(r => [r, `${r.age} ans · ${r.price}`])],
+    [ico("star") + " Les plus choisis", chosen],
+    [ico("tag") + " Bonnes affaires (40 ou moins)", m.list.filter(r => r.pts >= 100 && r.price <= 40).sort((a, b) => b.value - a.value).slice(0, 5).map(r => [r, `${r.pts} pts 2026 · ${r.price}`])],
+    [ico("up") + " En forme", m.list.filter(r => r.price >= 10).sort((a, b) => (b.seasons[m.years[0]] - (b.seasons[m.years[1]] || 0)) - (a.seasons[m.years[0]] - (a.seasons[m.years[1]] || 0))).slice(0, 5).map(r => [r, `+${r.seasons[m.years[0]] - (r.seasons[m.years[1]] || 0)} pts sur 2025`])],
+    [ico("leaf") + " Jeunes talents", m.list.filter(r => r.age != null && r.age <= 23).slice(0, 5).map(r => [r, `${r.age} ans · ${r.price}`])],
   ].filter(b => b[1].length);
   return `<div class="trends">${blocks.map(([t, rows]) => `
     <div class="trend"><div class="mp-title">${t}</div>
@@ -869,11 +869,11 @@ function ownership(key) {
 /* petites étiquettes : forme, jeune talent, bonne affaire, valeur sûre… (la plus parlante d'abord) */
 function riderBadges(r) {
   const out = [];
-  if (r.formF >= 1.05) out.push({ i: "🔥", c: "hot", t: "En forme : 2026 bien au-dessus des deux saisons d'avant" });
-  if (r.age != null && r.age <= 23 && r.price >= 15) out.push({ i: "🌱", c: "young", t: "Jeune talent : 23 ans ou moins, déjà des résultats" });
-  if (r.pts >= 100 && r.price <= 40 && MARKET && r.value >= MARKET.valueTop) out.push({ i: "💎", c: "value", t: "Bonne affaire : beaucoup de points 2026 pour son prix" });
-  if (r.active >= 6 && r.price >= 25) out.push({ i: "🛡️", c: "solid", t: "Valeur sûre : des points presque chaque saison depuis 2020" });
-  if (r.formF <= .95 && r.price >= 15) out.push({ i: "📉", c: "down", t: "En baisse : 2026 en dessous des deux saisons d'avant" });
+  if (r.formF >= 1.05) out.push({ i: ico("up"), c: "hot", t: "En forme : 2026 bien au-dessus des deux saisons d'avant" });
+  if (r.age != null && r.age <= 23 && r.price >= 15) out.push({ i: ico("leaf"), c: "young", t: "Jeune talent : 23 ans ou moins, déjà des résultats" });
+  if (r.pts >= 100 && r.price <= 40 && MARKET && r.value >= MARKET.valueTop) out.push({ i: ico("tag"), c: "value", t: "Bonne affaire : beaucoup de points 2026 pour son prix" });
+  if (r.active >= 6 && r.price >= 25) out.push({ i: ico("shield"), c: "solid", t: "Valeur sûre : des points presque chaque saison depuis 2020" });
+  if (r.formF <= .95 && r.price >= 15) out.push({ i: ico("down"), c: "down", t: "En baisse : 2026 en dessous des deux saisons d'avant" });
   return out;
 }
 const pctF = x => `${x > 1 ? "+" : x < 1 ? "−" : "±"}${Math.round(Math.abs(x - 1) * 100)} %`;
@@ -897,7 +897,7 @@ function riderSheetHTML(r) {
   const tile = (v, l) => `<div class="rs-tile"><b>${v}</b><span>${l}</span></div>`;
   return `
     <div class="modal-card rs-card tier-${r.tier.id}" role="dialog" aria-modal="true">
-      <button class="modal-x" data-rclose aria-label="Fermer">✕</button>
+      <button class="modal-x" data-rclose aria-label="Fermer">${ico("close")}</button>
       <div class="rs-head">
         <div class="mono rs-mono"><span>${esc(initials(r.name))}</span>${r.nat ? cflag(r.nat, "flag lg") : ""}</div>
         <div class="rs-id">
