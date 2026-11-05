@@ -440,8 +440,8 @@ const game = { mode: store.get("jeu-mode", "velo"), tab: "team", me: null, draft
 
 function modeSwitchHTML() {
   return `<div class="gmode" role="tablist">
-    <button class="${game.mode === "velo" ? "on" : ""}" data-gmode="velo">🚴 Cyclisme ${YEAR}</button>
-    <button class="${game.mode === "foot" ? "on" : ""}" data-gmode="foot">⚽ Football 2026-27</button>
+    <button class="${game.mode === "velo" ? "on" : ""}" data-gmode="velo">${ico("bike")} Cyclisme ${YEAR}</button>
+    <button class="${game.mode === "foot" ? "on" : ""}" data-gmode="foot">${ico("ball")} Football 2026-27</button>
   </div>`;
 }
 function tierBadge(t) { return `<span class="tier tier-${t.id}">${t.name}</span>`; }
@@ -603,7 +603,7 @@ function drawGame() {
       <div class="g-hero-side">
         <div class="countdown">${started ? `<b>${myScore.total}</b><span>points ${YEAR}</span>` : `<b>${daysLeft}</b><span>jour${daysLeft > 1 ? "s" : ""} avant le départ</span>`}</div>
         <div class="phase ${ph.open ? "open" : "shut"}">${esc(ph.label)}</div>
-        <div class="mode">${ONLINE ? "🌐 Classement en ligne" : "💻 Mode local · ce PC"}</div>
+        <div class="mode">${ONLINE ? `${ico("online")} Classement en ligne` : "Mode local, sur ce PC"}</div>
       </div>
     </section>`;
 

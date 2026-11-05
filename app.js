@@ -97,6 +97,29 @@ const BY_SLUG = Object.fromEntries(LEAGUES.map(l => [l.s, l]));
 
 // ---------------------------------------------------------------- utils
 const $ = (sel, el = document) => el.querySelector(sel);
+/* icônes maison : un seul style (trait de 1,8, coins arrondis), à la place des emojis */
+const ICONS = {
+  calendar: '<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7M10 17h4"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+  play: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10.5 9.2v5.6l4.6-2.8-4.6-2.8z" fill="currentColor" stroke="none"/>',
+  star: '<path d="M12 3.8l2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8L12 3.8z" fill="currentColor" stroke="none"/>',
+  globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z"/>',
+  shield: '<path d="M12 3.5l7 2.5v5.5c0 4.4-2.9 7.6-7 9-4.1-1.4-7-4.6-7-9V6l7-2.5z"/>',
+  flag: '<path d="M5.5 21V4M5.5 4.5h11l-2 3.5 2 3.5h-11"/>',
+  help: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.4"/><circle cx="12" cy="16.6" r=".6" fill="currentColor"/>',
+  ball: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.6l3.3 2.4-1.3 3.9h-4l-1.3-3.9L12 7.6zM12 3.5v4.1M15.3 10l4-1.2M14 13.9l2.4 3.4M10 13.9l-2.4 3.4M8.7 10l-4-1.2"/>',
+  assist: '<path d="M4 17c4-1 7-4 9-9"/><path d="M9.5 8H13v3.5"/><circle cx="18" cy="17" r="2.5"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  users: '<circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6"/><circle cx="16.5" cy="8.5" r="2.6"/><path d="M15.5 14.4c2.4-.2 4.3 1.2 5 4.1"/>',
+  bike: '<circle cx="6" cy="16" r="3.5"/><circle cx="18" cy="16" r="3.5"/><path d="M6 16l4-7h5l3 7M10 9l3 7h-7M14.5 9l-1.2-3H11"/>',
+  stadium: '<ellipse cx="12" cy="12" rx="9" ry="5.5"/><ellipse cx="12" cy="12" rx="4.5" ry="2.4"/><path d="M3 12v3.5c0 3 4 5 9 5s9-2 9-5V12"/>',
+  sound: '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
+  mute: '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
+  online: '<circle cx="12" cy="12" r="8.5"/><path d="M8 12l2.6 2.6L16.5 9"/>',
+};
+const ico = (name, cls = "i") => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ""}</svg>`;
+window.ico = ico;
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pad = n => String(n).padStart(2, "0");
 const ymd = d => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
@@ -180,8 +203,11 @@ function footSection(v) {
 }
 
 // ---------------------------------------------------------------- horloge
-function tick() { $("#clock").textContent = new Date().toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
-tick(); setInterval(tick, 1000);
+function tick() {
+  const n = new Date();
+  $("#clock").textContent = `${n.toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" })} · ${n.toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" })}`;
+}
+tick(); setInterval(tick, 15000);
 
 // ---------------------------------------------------------------- switch sport
 document.querySelectorAll(".sport-btn").forEach(b => b.addEventListener("click", () => setSport(b.dataset.sport)));
@@ -215,7 +241,7 @@ let refreshTimer = null;
 function leagueIcon(l) {
   if (state.logos[l.s]) return `<img src="${state.logos[l.s]}" alt="">`;
   if (l.f) return flagImg(l.f, "flag");
-  return `<span>${l.i || "⚽"}</span>`;
+  return l.i ? `<span>${ico(/🏆|🏅/.test(l.i) ? "trophy" : "globe")}</span>` : `<span>${ico("ball")}</span>`;
 }
 
 function renderSidebar() {
@@ -229,22 +255,22 @@ function renderSidebar() {
     </button>`;
   let html = `
     <button class="league-item today-item ${state.view === "today" ? "active" : ""}" data-slug="today">
-      <span class="ico">📅</span><span class="lname">Tous les matchs du jour<span class="lcountry">Toutes compétitions</span></span>
+      <span class="ico">${ico("calendar")}</span><span class="lname">Tous les matchs du jour<span class="lcountry">Toutes compétitions</span></span>
     </button>
     <button class="league-item today-item bel-item ${state.view === "belges" ? "active" : ""}" data-slug="belges">
       <span class="ico">${flagImg("be")}</span><span class="lname">Nos Belges<span class="lcountry">Buteurs et passeurs belges</span></span>
     </button>
     <button class="league-item today-item ${state.view === "uefa" ? "active" : ""}" data-slug="uefa">
-      <span class="ico">🏆</span><span class="lname">Coefficients UEFA<span class="lcountry">Pays, clubs et équipes nationales</span></span>
+      <span class="ico">${ico("trophy")}</span><span class="lname">Coefficients UEFA<span class="lcountry">Pays, clubs et équipes nationales</span></span>
     </button>
     <button class="league-item today-item ${state.view === "notifs" ? "active" : ""}" data-slug="notifs">
-      <span class="ico">🔔</span><span class="lname">Mes notifications<span class="lcountry">Buts et résultats de tes équipes</span></span>
+      <span class="ico">${ico("bell")}</span><span class="lname">Mes notifications<span class="lcountry">Buts et résultats de tes équipes</span></span>
     </button>
     <button class="league-item today-item ${state.view === "goals" ? "active" : ""}" data-slug="goals">
-      <span class="ico">🎬</span><span class="lname">Plus beaux buts<span class="lcountry">Vidéos des derniers matchs</span></span>
+      <span class="ico">${ico("play")}</span><span class="lname">Plus beaux buts<span class="lcountry">Vidéos des derniers matchs</span></span>
     </button>`;
   const favs = state.favs.map(s => BY_SLUG[s]).filter(Boolean).filter(match);
-  if (favs.length) html += `<div class="group-title">★ Favoris</div>` + favs.map(item).join("");
+  if (favs.length) html += `<div class="group-title">${ico("star")} Favoris</div>` + favs.map(item).join("");
   for (const [g, title] of Object.entries(GROUPS)) {
     const ls = LEAGUES.filter(l => l.g === g && match(l));
     if (ls.length) html += `<div class="group-title">${title}</div>` + ls.map(item).join("");
@@ -323,7 +349,7 @@ function matchHTML(m) {
     : `<div class="score pre">${m.state === "pre" ? esc(m.label) : "–"}</div>`;
   const pen = m.home.pen != null && m.away.pen != null ? `<div class="note">Tirs au but : ${m.home.pen} – ${m.away.pen}</div>` : "";
   const ev = side => m.events.filter(x => x.team === side).map(x => {
-    const icon = x.goal ? "⚽" : x.red ? `<i class="card-r"></i>` : `<i class="card-y"></i>`;
+    const icon = x.goal ? ico("ball") : x.red ? `<i class="card-r"></i>` : `<i class="card-y"></i>`;
     const extra = x.goal ? (x.pk ? " (pén.)" : x.og ? " (c.s.c.)" : "") : "";
     return `<div class="${side} ev">${side === "h" ? `${esc(x.who)}${extra} ${esc(x.min)} ${icon}` : `${icon} ${esc(x.min)} ${esc(x.who)}${extra}`}</div>`;
   }).join("");
@@ -331,11 +357,11 @@ function matchHTML(m) {
     <div class="details">
       <div>${ev("h") || ""}</div><div class="mid">${m.events.length ? "" : "—"}</div><div>${ev("a") || ""}</div>
       ${m.notes ? `<div class="venue">${esc(m.notes)}</div>` : ""}
-      <div class="venue">${m.venue ? "🏟 " + esc(m.venue) + " · " : ""}${m.date ? fmtDay(m.date) + (m.noTime ? "" : " " + fmtTime(m.date)) : ""}</div>
+      <div class="venue">${m.venue ? ico("stadium") + " " + esc(m.venue) + " · " : ""}${m.date ? fmtDay(m.date) + (m.noTime ? "" : " " + fmtTime(m.date)) : ""}</div>
     </div>`;
   return `
     <div class="match" data-id="${m.id}" ${m.league ? `data-league="${m.league}"` : ""}>
-      <div class="status ${m.cls}">${m.state === "pre" ? "À venir" : esc(m.label)}</div>
+      <div class="status ${m.cls}">${m.state === "pre" ? "" : esc(m.label)}</div>
       <div class="team home ${res("home")}"><span class="tn" title="${esc(m.home.full)}" ${m.league ? teamAttr(m.home.id, m.league) : ""}>${esc(m.home.name)}</span>${m.home.logo ? `<img src="${m.home.logo}" alt="" loading="lazy">` : ""}</div>
       ${score}
       <div class="team away ${res("away")}">${m.away.logo ? `<img src="${m.away.logo}" alt="" loading="lazy">` : ""}<span class="tn" title="${esc(m.away.full)}" ${m.league ? teamAttr(m.away.id, m.league) : ""}>${esc(m.away.name)}</span></div>
@@ -364,17 +390,19 @@ async function renderToday(silent = false) {
   const main = $("#foot-main");
   const d = state.day;
   const isToday = sameDay(d, new Date());
+  const dayName = d.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" });
+  const rel = isToday ? "Aujourd'hui" : sameDay(d, new Date(Date.now() - 864e5)) ? "Hier" : sameDay(d, new Date(Date.now() + 864e5)) ? "Demain" : d < new Date() ? "Résultats" : "Programme";
   if (!silent) main.innerHTML = `
-    <div class="page-head">
-      <div><h1>Matchs du jour</h1><div class="sub">Toutes les compétitions européennes et internationales</div></div>
-      <div class="grow"></div>
-      <div class="nav-row">
+    <header class="day-head">
+      <div class="kicker">${rel}</div>
+      <h1>${esc(dayName)}</h1>
+      <p class="lede" id="day-lede">On fait le tour des terrains…</p>
+      <div class="day-nav">
         <button class="nav-btn" data-day="-1" aria-label="Jour précédent">‹</button>
-        <div class="nav-label">${isToday ? "Aujourd'hui" : fmtDay(d)}</div>
         <button class="nav-btn" data-day="1" aria-label="Jour suivant">›</button>
-        ${isToday ? "" : `<button class="pill-today" data-day="0">Aujourd'hui</button>`}
+        ${isToday ? "" : `<button class="pill-today" data-day="0">Revenir à aujourd'hui</button>`}
       </div>
-    </div>
+    </header>
     <div id="today-body">${loadingHTML(`Chargement de ${LEAGUES.length} compétitions…`)}</div>`;
 
   const key = ymd(d);
@@ -391,7 +419,7 @@ async function renderToday(silent = false) {
     : getJSON(`${API}/${o.slug}/scoreboard?dates=${key}`, isToday ? 30000 : 300000));
   if (state.view !== "today" || ymd(state.day) !== key) return;
 
-  const blocks = [], liveList = [];
+  const blocks = [], liveList = [], allMatches = [];
   let total = 0, live = 0, done = 0, goals = 0;
   order.forEach((o, i) => {
     const data = results[i];
@@ -404,6 +432,7 @@ async function renderToday(silent = false) {
     }
     if (!ms.length) return;
     ms.sort((a, b) => a.date - b.date);
+    allMatches.push(...ms);
     total += ms.length;
     ms.forEach(m => {
       if (m.state === "in") { live++; liveList.push({ m, l: o.l, name: o.i ? o.name : null }); }
@@ -414,6 +443,8 @@ async function renderToday(silent = false) {
   });
   const body = $("#today-body");
   if (!body) return;
+  const ld = $("#day-lede");
+  if (ld) ld.innerHTML = dayLede({ isToday, past: !isToday && d < new Date(), total, live, done, goals, blocks: blocks.length, all: allMatches });
   body.innerHTML = total ? `
     <div class="summary-row">
       <div class="stat"><b>${total}</b><span>matchs</span></div>
@@ -424,6 +455,26 @@ async function renderToday(silent = false) {
     </div>${liveBlock(liveList)}${blocks.join("")}`
     : `<div class="empty">Aucun match ce jour-là dans les compétitions suivies.<br>Utilise les flèches pour changer de date.</div>`;
   if (isToday) refreshTimer = setTimeout(() => renderToday(true), live ? 30000 : 120000);
+}
+
+/* la phrase d'ouverture du jour, écrite comme dans un journal (et avec un œil sur les clubs belges) */
+const BE_CLUBS = /\b(anderlecht|brugge|bruges|union|st\.? ?gilloise|gent|genk|antwerp|standard|cercle|charleroi|westerlo|mechelen|malines|leuven|sint-truiden|st\.? ?truiden|dender|zulte|louvi[eè]re|beveren)\b/i;
+function dayLede({ isToday, past, total, live, done, goals, blocks, all }) {
+  if (!total) return "Pas un seul match dans nos compétitions ce jour-là. Les pelouses se reposent.";
+  const hh = d => `${d.getHours()}h${d.getMinutes() ? String(d.getMinutes()).padStart(2, "0") : ""}`;
+  const be = all.filter(m => BE_CLUBS.test(`${m.home.full || m.home.name} ${m.away.full || m.away.name}`)).sort((a, b) => a.date - b.date).slice(0, 3);
+  const pick = be.map(m => `<b>${esc(m.home.name)} – ${esc(m.away.name)}</b>${m.state === "pre" ? ` à ${hh(m.date)}` : m.state === "post" ? ` (${esc(m.home.score)}-${esc(m.away.score)})` : ` (${esc(m.home.score)}-${esc(m.away.score)}, en cours)`}`);
+  const list = arr => arr.length > 1 ? arr.slice(0, -1).join(", ") + " et " + arr[arr.length - 1] : arr[0];
+  const n = x => x > 1 ? "s" : "";
+  let t;
+  if (past) t = `${total} match${n(total)} dans ${blocks} compétition${n(blocks)}, ${goals} but${n(goals)} au total.`;
+  else if (!isToday) t = `${total} match${n(total)} au programme dans ${blocks} compétition${n(blocks)}.`;
+  else if (live) t = `<span class="live-word">${live} match${n(live)} en cours</span> en ce moment, ${total} sur la journée.`;
+  else if (done === total) t = `Rideau : les ${total} matchs du jour sont joués, ${goals} but${n(goals)} en tout.`;
+  else if (done) t = `${done} match${n(done)} déjà joué${n(done)}, ${total - done} encore à venir aujourd'hui.`;
+  else t = `${total} match${n(total)} au programme aujourd'hui, le premier coup d'envoi à ${hh(all.reduce((a, m) => m.date < a ? m.date : a, all[0].date))}.`;
+  if (pick.length) t += ` Côté belge : ${list(pick)}.`;
+  return t;
 }
 
 /* tous les matchs en direct, toutes compétitions, tout en haut */
@@ -626,7 +677,7 @@ async function renderWikiCup(l) {
       <div class="comp-block"><div class="matches">${g.ms.map(matchHTML).join("")}</div></div>
     </div>`;
   const finalPlayed = groups.some(g => /^(final|match)$/i.test(g.name) && g.played);
-  const champ = r.champion && finalPlayed ? `<div class="champion">🏆 Vainqueur : <b>${esc(r.champion)}</b></div>` : "";
+  const champ = r.champion && finalPlayed ? `<div class="champion">${ico("trophy")} Vainqueur : <b>${esc(r.champion)}</b></div>` : "";
   $("#league-body").innerHTML = (champ
     + (played.length ? `<div class="section-title" style="margin:8px 0 14px"><h2>Résultats</h2><span>tour le plus récent en premier</span></div>${played.map(block).join("")}` : "")
     + (upcoming.length ? `<div class="section-title" style="margin:8px 0 14px"><h2>À venir</h2></div>${upcoming.map(block).join("")}` : ""))
@@ -1341,15 +1392,15 @@ async function toggleStage(i, row) {
         const ol = det.querySelector(".sd-list");
         if (pr && ol) pr.marks.filter(m => m.kind === "climb").forEach(m => { const li = [...ol.children].find(li => li.dataset.climb === m.name); if (li) ol.appendChild(li); });
         if (ol) [...ol.children].filter(li => li.querySelector("em")?.textContent.includes("arrivée")).forEach(li => ol.appendChild(li));
-        if (pr?.loops) { pbox.innerHTML = `<p class="hint pf-none">🗺️ Pas de profil fiable pour cette étape : son tracé (${esc(km)} km, avec des boucles ou des routes secondaires) n'est pas assez détaillé dans les sources publiques. La liste des côtes est juste en dessous.</p>`; return; }
-        pbox.innerHTML = pr ?`<div class="mp-title">Profil de l'étape</div><div class="pf-wrap">${profileSVG(pr)}</div>${pr.real ? `<div class="pf-facts"><span>📏 ${String(Math.round(pr.dist * 10) / 10).replace(".", ",")} km</span><span>⛰ ${pr.gain.toLocaleString("fr-BE")} m de dénivelé positif</span><span>🔝 ${Math.round(Math.max(...pr.curve.map(c => c.alt))).toLocaleString("fr-BE")} m au plus haut</span></div>` : ""}<p class="pf-note">${pr.real ? "Profil calculé sur l'itinéraire vélo le plus probable (OpenStreetMap) entre le départ, les côtes et l'arrivée, avec le relief réel. Il peut différer un peu du tracé officiel." : "Profil approximatif : relief réel entre le départ, les côtes et l'arrivée (l'itinéraire routier n'a pas pu être calculé)."} Couleurs : pente de la route.</p>` : `<p class="hint pf-none">🗺️ Pas de profil pour cette étape : le départ et l'arrivée n'ont pas pu être placés sur la carte.</p>`; })
+        if (pr?.loops) { pbox.innerHTML = `<p class="hint pf-none">Pas de profil fiable pour cette étape : son tracé (${esc(km)} km, avec des boucles ou des routes secondaires) n'est pas assez détaillé dans les sources publiques. La liste des côtes est juste en dessous.</p>`; return; }
+        pbox.innerHTML = pr ?`<div class="mp-title">Profil de l'étape</div><div class="pf-wrap">${profileSVG(pr)}</div>${pr.real ? `<div class="pf-facts"><span>${String(Math.round(pr.dist * 10) / 10).replace(".", ",")} km</span><span>${pr.gain.toLocaleString("fr-BE")} m de dénivelé positif</span><span>point culminant ${Math.round(Math.max(...pr.curve.map(c => c.alt))).toLocaleString("fr-BE")} m au plus haut</span></div>` : ""}<p class="pf-note">${pr.real ? "Profil calculé sur l'itinéraire vélo le plus probable (OpenStreetMap) entre le départ, les côtes et l'arrivée, avec le relief réel. Il peut différer un peu du tracé officiel." : "Profil approximatif : relief réel entre le départ, les côtes et l'arrivée (l'itinéraire routier n'a pas pu être calculé)."} Couleurs : pente de la route.</p>` : `<p class="hint pf-none">Pas de profil pour cette étape : le départ et l'arrivée n'ont pas pu être placés sur la carte.</p>`; })
       .catch(() => { pbox.innerHTML = ""; });
   }
   box.innerHTML = list.length ? `
-      <div class="mp-title">Côtes de l'étape · ${list.length}${summit ? ` <span class="sd-summit">⛰ Arrivée au sommet</span>` : ""}</div>
+      <div class="mp-title">Côtes de l'étape · ${list.length}${summit ? ` <span class="sd-summit">· arrivée au sommet</span>` : ""}</div>
       <ol class="sd-list">${list.map((k, j) => `
         <li data-climb="${esc(k.name)}"><span class="sd-cat c${esc(k.cat || "x")}" title="${esc(CAT_FR[k.cat] || "Catégorie inconnue")}">${k.cat ? esc(k.cat) : "•"}</span>
-          <b>${esc(k.name)}</b>${k.n > 1 ? `<em>×${k.n}</em>` : ""}${isFin(k) ? `<em>🏁 arrivée</em>` : ""}${k.info ? `<span class="sd-info">${esc(k.info)}</span>` : ""}${k.km != null ? `<span class="sd-km">km ${String(k.km).replace(".", ",")}</span>` : ""}</li>`).join("")}</ol>`
+          <b>${esc(k.name)}</b>${k.n > 1 ? `<em>×${k.n}</em>` : ""}${isFin(k) ? `<em>arrivée</em>` : ""}${k.info ? `<span class="sd-info">${esc(k.info)}</span>` : ""}${k.km != null ? `<span class="sd-km">km ${String(k.km).replace(".", ",")}</span>` : ""}</li>`).join("")}</ol>`
     : `<p class="hint">${/flat|plat/i.test(s.type || "") ? "Étape plate : pas de grande côte au programme." : /time trial|contre/i.test(s.type || "") ? "Contre-la-montre : parcours sans côte répertoriée." : "Wikipédia ne détaille pas encore les côtes de cette étape."}${summit ? " Arrivée au sommet." : ""}</p>`;
 }
 function closeRace() {
@@ -1569,7 +1620,7 @@ function drawMatch() {
       </div>
       <div class="mc-team"><div class="tlink" ${teamAttr(A.team.id, mc.league)}>${logo(A) ? `<img src="${logo(A)}" alt="">` : ""}<b>${esc(A.team.displayName)}</b></div>${followTeamBtn(A)}<div class="mc-goals">${goals(A.team.id).join("<br>")}</div></div>
     </div>
-    <div class="mc-info">${[venue && "🏟 " + esc(venue), att ? `${Number(att).toLocaleString("fr-BE")} spectateurs` : "", ref && "Arbitre : " + esc(ref)].filter(Boolean).join(" · ")}
+    <div class="mc-info">${[venue && ico("stadium") + " " + esc(venue), att ? `${Number(att).toLocaleString("fr-BE")} spectateurs` : "", ref && "Arbitre : " + esc(ref)].filter(Boolean).join(" · ")}
       ${played ? `<a class="yt" href="https://www.youtube.com/results?search_query=${encodeURIComponent(`${H.team.displayName} ${A.team.displayName} résumé ${new Date(comp.date).getFullYear()}`)}" target="_blank" rel="noopener">▶ Résumé sur YouTube</a>` : ""}</div>
     <div class="tabs mc-tabs">
       <button class="tab ${mc.tab === "prematch" ? "active" : ""}" data-mctab="prematch">${played ? "Pronostic & forme" : "Avant-match"}</button>
@@ -1608,8 +1659,8 @@ function playerMarks(p) {
   const plays = p.plays || [];
   const subMin = plays.find(x => x.substitution)?.clock?.displayValue;
   let m = "";
-  if (s.totalGoals) m += `<span class="pm goal">${"⚽".repeat(Math.min(s.totalGoals, 3))}</span>`;
-  if (s.ownGoals) m += `<span class="pm og" title="But contre son camp">⚽</span>`;
+  if (s.totalGoals) m += `<span class="pm goal">${ico("ball").repeat(Math.min(s.totalGoals, 3))}</span>`;
+  if (s.ownGoals) m += `<span class="pm og" title="But contre son camp">${ico("ball")}</span>`;
   if (s.goalAssists) m += `<span class="pm ast" title="Passe décisive">A${s.goalAssists > 1 ? s.goalAssists : ""}</span>`;
   if (s.redCards) m += `<i class="card-r"></i>`; else if (s.yellowCards) m += `<i class="card-y"></i>`;
   if (p.subbedOut) m += `<span class="pm out" title="Remplacé">▼${esc(subMin || "")}</span>`;
@@ -1756,7 +1807,7 @@ function eventsHTML(keyEv, H, A) {
     const home = k.team?.id === H.team.id;
     const ps = (k.participants || []).filter(p => p.athlete?.displayName);
     const names = ps.map(p => `<span class="plink" ${playerAttr(p.athlete)}>${esc(p.athlete.displayName)}</span>`);
-    const icon = k.scoringPlay ? "⚽" : /red/.test(t) ? `<i class="card-r"></i>` : /yellow/.test(t) ? `<i class="card-y"></i>` : /substitution/.test(t) ? "⇄" : "•";
+    const icon = k.scoringPlay ? ico("ball") : /red/.test(t) ? `<i class="card-r"></i>` : /yellow/.test(t) ? `<i class="card-y"></i>` : /substitution/.test(t) ? "⇄" : "•";
     const txt = /substitution/.test(t) && names.length > 1
       ? `<span class="in">▲ ${names[0]}</span> <span class="out">▼ ${names[1]}</span>`
       : `<b>${names[0] || ""}</b>${t === "own-goal" ? " (c.s.c.)" : /penalty/i.test(k.type?.text || "") ? " (pén.)" : ""}${names[1] && k.scoringPlay ? ` <span class="ast">passe : ${names[1]}</span>` : ""}`;
@@ -1772,7 +1823,7 @@ function eventsHTML(keyEv, H, A) {
 const GOAL_LEAGUES = ["esp.1"];
 const clipKind = h => /spectacular|stunning|incredible|great goal|wonder|brilliant|amazing|screamer|golazo/i.test(h) ? "top"
   : /game highlights/i.test(h) ? "hl" : /save/i.test(h) ? "save" : /scores|goal|back of the net|penalty/i.test(h) ? "goal" : "other";
-const CLIP_LABEL = { top: "⭐ But spectaculaire", goal: "⚽ But", hl: "🎬 Résumé du match", save: "🧤 Arrêt", other: "🎥 Vidéo" };
+const CLIP_LABEL = { top: "But spectaculaire", goal: "But", hl: "Résumé du match", save: "Arrêt", other: "🎥 Vidéo" };
 function clipFrom(v, ev, slug) {
   const src = v.links?.source?.HD?.href || v.links?.source?.href;
   if (!src) return null;
@@ -1797,7 +1848,7 @@ function clipCard(c) {
 }
 /* fil vertical infini (façon Reels) : une vidéo par écran, lecture auto, chargement des semaines précédentes en bas du fil */
 const feed = { filter: "all", items: [], seen: new Set(), win: 0, loading: false, done: false, sound: false, playObs: null, moreObs: null };
-const FEED_FILTERS = [["all", "Tout"], ["top", "⭐ Spectaculaires"], ["goal", "⚽ Buts"], ["hl", "🎬 Résumés"], ["save", "🧤 Arrêts"]];
+const FEED_FILTERS = [["all", "Tout"], ["top", "Spectaculaires"], ["goal", "Buts"], ["hl", "Résumés"], ["save", "🧤 Arrêts"]];
 const FEED_WINDOW_DAYS = 7, FEED_MAX_WINDOWS = 52;   // on remonte semaine par semaine, jusqu'à un an
 
 async function loadGoalWindow(k) {
@@ -1838,7 +1889,7 @@ function renderGoals() {
   main.innerHTML = `
     <div class="feed-head">
       <div><h1>Plus beaux buts</h1><div class="sub">LaLiga · vidéos ESPN · fais défiler vers le bas</div></div>
-      <button class="ghost feed-sound" id="feed-sound">${feed.sound ? "🔊 Son activé" : "🔇 Son coupé"}</button>
+      <button class="ghost feed-sound" id="feed-sound">${feed.sound ? "Son activé" : "Son coupé"}</button>
     </div>
     <div class="tabs feed-filters">${FEED_FILTERS.map(([k, n]) => `<button class="tab ${feed.filter === k ? "active" : ""}" data-ffilter="${k}">${n}</button>`).join("")}</div>
     <div class="feed" id="feed"><div class="feed-more" id="feed-more">${loadingHTML("Recherche des vidéos…")}</div></div>`;
@@ -1869,7 +1920,7 @@ function renderGoals() {
   };
   $("#feed-sound").onclick = () => {
     feed.sound = !feed.sound;
-    $("#feed-sound").textContent = feed.sound ? "🔊 Son activé" : "🔇 Son coupé";
+    $("#feed-sound").textContent = feed.sound ? "Son activé" : "Son coupé";
     box.querySelectorAll("video").forEach(v => { v.muted = !feed.sound; });
   };
   box.onclick = e => {
@@ -2045,7 +2096,7 @@ function weekPlayers(d, byId) {
   (d.week?.assists || []).forEach(e => add(e, "assists"));
   return [...m.values()];
 }
-const BEL_TABS = [["goals", "⚽ Buteurs"], ["assists", "🅰️ Passeurs"], ["recent", "🔥 Derniers buts"], ["all", "👥 Tous les Belges"]];
+const BEL_TABS = [["goals", "Buteurs"], ["assists", "Passeurs"], ["recent", "Derniers buts"], ["all", "Tous les Belges"]];
 const BEL_KINDS = [["all", "Toutes compétitions"], ["league", "Championnats"], ["europe", "Coupes d'Europe"], ["cup", "Coupes nationales"]];
 
 function belStat(p, key) {
@@ -2261,7 +2312,7 @@ async function renderUefa() {
         body = `
         <div class="toolbar">
           <button class="chip ${uefa.zone === "europe" ? "on" : ""}" data-uefa-zone="europe">${flagImg("eu")} Europe</button>
-          <button class="chip ${uefa.zone === "world" ? "on" : ""}" data-uefa-zone="world">🌍 Monde</button>
+          <button class="chip ${uefa.zone === "world" ? "on" : ""}" data-uefa-zone="world">Monde</button>
         </div>
         <div class="table-wrap"><table class="uefa-table nat-t">
           <thead><tr><th>#</th><th class="l">Équipe nationale</th>${uefa.zone === "europe" ? `<th>Monde</th>` : `<th>Zone</th>`}<th>Points</th><th>Évolution</th></tr></thead>
@@ -2311,10 +2362,10 @@ async function renderUefa() {
         <button class="${isNow ? "on" : ""}" data-uefa-period="now">Cette saison</button>
       </div>`}
       <div class="tabs bel-tabs">
-        <button class="tab ${uefa.tab === "assoc" ? "active" : ""}" data-uefa-tab="assoc">🌍 Pays</button>
-        <button class="tab ${uefa.tab === "clubs" ? "active" : ""}" data-uefa-tab="clubs">🛡️ Clubs</button>
-        <button class="tab ${uefa.tab === "nat" ? "active" : ""}" data-uefa-tab="nat">🏳️ Équipes nationales</button>
-        <button class="tab ${uefa.tab === "how" ? "active" : ""}" data-uefa-tab="how">❓ Comment ça marche</button>
+        <button class="tab ${uefa.tab === "assoc" ? "active" : ""}" data-uefa-tab="assoc">Pays</button>
+        <button class="tab ${uefa.tab === "clubs" ? "active" : ""}" data-uefa-tab="clubs">Clubs</button>
+        <button class="tab ${uefa.tab === "nat" ? "active" : ""}" data-uefa-tab="nat">Équipes nationales</button>
+        <button class="tab ${uefa.tab === "how" ? "active" : ""}" data-uefa-tab="how">Comment ça marche</button>
       </div>
       ${uefa.tab === "how" ? how : body}
       <p class="source">${uefa.tab === "nat" ? "Données officielles FIFA" : `Données officielles UEFA · dernière mise à jour UEFA ${esc(upd)}`}, vérifiées automatiquement chaque jour.</p>`;
@@ -2696,7 +2747,7 @@ function toast(msg) {
   t.textContent = msg; t.classList.add("show");
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 5200);
 }
-const bellBtn = (on, attrs, label = "") => `<button class="follow-btn ${on ? "on" : ""}" ${attrs}>${on ? "🔔 Suivi" : "🔔 Suivre"}${label}</button>`;
+const bellBtn = (on, attrs, label = "") => `<button class="follow-btn ${on ? "on" : ""}" ${attrs}>${ico("bell")}${on ? "Suivi" : "Suivre"}${label}</button>`;
 
 // boutons « Suivre » (championnat dans l'en-tête, équipes dans la fiche match)
 document.addEventListener("click", async e => {
@@ -2708,7 +2759,7 @@ document.addEventListener("click", async e => {
   if (b.dataset.followLeague) on = await PUSH.toggleLeague(b.dataset.followLeague);
   else on = await PUSH.toggleTeam({ id: b.dataset.followTeam, name: b.dataset.name, logo: b.dataset.logo, leagues: b.dataset.leagues ? b.dataset.leagues.split(",") : [] });
   document.querySelectorAll(b.dataset.followLeague ? `[data-follow-league="${b.dataset.followLeague}"]` : `[data-follow-team="${b.dataset.followTeam}"]`)
-    .forEach(x => { x.classList.toggle("on", on); x.textContent = on ? "🔔 Suivi" : "🔔 Suivre"; });
+    .forEach(x => { x.classList.toggle("on", on); x.innerHTML = ico("bell") + (on ? "Suivi" : "Suivre"); });
   b.disabled = false;
   if (on) toast(PUSH.on() ? `Tu recevras les buts et résultats de ${b.dataset.name || "ce championnat"}.` : "Suivi enregistré. Active les notifications pour être prévenu.");
   if (state.view === "notifs") renderNotifs();
@@ -2719,7 +2770,7 @@ function renderNotifs() {
   const main = $("#foot-main");
   const f = PUSH.follows(), st = PUSH.status();
   const statusCard = {
-    "on": `<div class="nt-status on"><b>🔔 Notifications activées</b><span>Tu reçois les alertes des équipes et championnats que tu suis.</span><div class="nt-actions"><button class="ghost" data-nt="test">Envoyer une notification de test</button><button class="ghost" data-nt="off">Désactiver</button></div></div>`,
+    "on": `<div class="nt-status on"><b>Notifications activées</b><span>Tu reçois les alertes des équipes et championnats que tu suis.</span><div class="nt-actions"><button class="ghost" data-nt="test">Envoyer une notification de test</button><button class="ghost" data-nt="off">Désactiver</button></div></div>`,
     "off": `<div class="nt-status"><b>Notifications désactivées</b><span>Active-les pour être prévenu des coups d'envoi, des buts et des résultats.</span><div class="nt-actions"><button class="cta" data-nt="on">Activer les notifications</button></div></div>`,
     "denied": `<div class="nt-status warn"><b>Notifications bloquées</b><span>Tu les as refusées pour ce site. Autorise-les dans les réglages de ton navigateur (Paramètres du site → Notifications → arena.eraz.ovh), puis reviens ici.</span></div>`,
     "ios-install": `<div class="nt-status warn"><b>Sur iPhone : installe d'abord l'appli</b><span>Apple n'autorise les notifications que pour les sites ajoutés à l'écran d'accueil. Installe Arena 360, ouvre-le depuis l'icône, puis reviens sur cette page.</span><div class="nt-actions"><button class="cta" data-nt="install">Installer Arena 360</button></div></div>`,
@@ -2737,12 +2788,12 @@ function renderNotifs() {
     <section class="nt-card">
       <div class="pm-title">Équipes suivies · ${f.teams.length}</div>
       ${f.teams.length ? f.teams.map(t => `<div class="nt-item">${t.logo ? `<img src="${esc(t.logo)}" alt="">` : ""}<b>${esc(t.name || t.id)}</b>${bellBtn(true, `data-follow-team="${esc(t.id)}" data-name="${esc(t.name || "")}"`)}</div>`).join("")
-        : `<p class="muted">Ouvre la fiche d'un match et appuie sur <b>🔔 Suivre</b> sous une équipe.</p>`}
+        : `<p class="muted">Ouvre la fiche d'un match et appuie sur <b>Suivre</b> sous une équipe.</p>`}
     </section>
     <section class="nt-card">
       <div class="pm-title">Championnats et coupes suivis · ${f.leagues.length}</div>
       ${f.leagues.length ? f.leagues.map(s => `<div class="nt-item"><b>${esc(lname(s))}</b>${bellBtn(true, `data-follow-league="${esc(s)}" data-name="${esc(lname(s))}"`)}</div>`).join("")
-        : `<p class="muted">Ouvre un championnat (Jupiler Pro League, Ligue des Champions…) et appuie sur <b>🔔 Suivre</b> en haut.</p>`}
+        : `<p class="muted">Ouvre un championnat (Jupiler Pro League, Ligue des Champions…) et appuie sur <b>Suivre</b> en haut.</p>`}
     </section>
     <p class="source">Les alertes arrivent en général moins de 2 minutes après le but. Arena ne garde aucune donnée personnelle : seulement l'adresse technique de ton appareil et ce que tu suis.</p>`;
   main.onclick = async e => {

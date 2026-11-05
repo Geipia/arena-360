@@ -1,0 +1,179 @@
+/* ARENA 360 — identité « programme de match »
+   Une seule feuille posée par-dessus styles.css : couleurs plus sobres, typographie de journal sportif,
+   moins d'effets. Pour revenir en arrière, il suffit de retirer le <link> vers ce fichier. */
+
+:root {
+  --bg: #0e1218;
+  --bg-2: #12171f;
+  --panel: #161c25;
+  --panel-2: #1b222c;
+  --line: #262f3b;
+  --line-soft: #1f2731;
+  --text: #edf0f4;
+  --muted: #9aa3b1;
+  --dim: #677283;
+  --foot: #3cc2e6;
+  --velo: #f2c230;
+  --jeu: #ef5d8e;
+  --live: #ff4d4d;
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --radius: 10px;
+  --skew: 0deg;
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --chalk: #f4efe4;                 /* blanc « craie » des titres */
+}
+
+/* fond : une seule nuance, juste une lumière de stade très discrète en haut */
+body {
+  background:
+    radial-gradient(1200px 380px at 50% -220px, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
+    var(--bg) !important;
+  background-attachment: fixed !important;
+  font-feature-settings: "tnum" 1;
+}
+body::before { display: none !important; }
+
+/* ---------- barre du haut : nette, sans néon ---------- */
+.topbar {
+  background: rgba(14, 18, 24, .94) !important;
+  border-bottom: 1px solid var(--line) !important;
+  box-shadow: none !important;
+}
+.topbar::after { display: none !important; }
+.brand .logo { filter: none !important; }
+.wordmark { transform: none !important; }
+.w-arena { background: none !important; -webkit-text-fill-color: var(--chalk) !important; color: var(--chalk) !important; letter-spacing: 3px !important; }
+.w-pulse { transform: none !important; border-radius: 3px; }
+.sport-btn { transform: none !important; border-radius: 999px !important; box-shadow: none !important; font-family: var(--body) !important; font-weight: 700 !important; font-style: normal !important; letter-spacing: .2px !important; text-transform: none !important; font-size: 14px !important; padding: 8px 16px !important; }
+.sport-btn > * { transform: none !important; }
+.sport-btn::after { display: none !important; }
+.sport-btn.active { box-shadow: none !important; }
+.clock { font: 600 14px var(--body) !important; letter-spacing: 0 !important; color: var(--muted) !important; text-transform: none; min-width: 0 !important; }
+
+/* ---------- typographie ---------- */
+.page-head h1, .team-head h2, .rank-head h2, .bel-hero h1, .hero h1, .g-hero h1 {
+  background: none !important; -webkit-text-fill-color: currentColor !important; color: var(--chalk) !important;
+  text-shadow: none !important; letter-spacing: .5px !important;
+}
+.page-head h1 { font: 800 40px/1 var(--display) !important; text-transform: uppercase; }
+.page-head .sub, .lede { font-family: var(--serif); font-size: 18px; color: var(--muted); }
+.eyebrow { letter-spacing: 2px !important; }
+
+/* ---------- onglets et boutons : plats ---------- */
+.tab { transform: none !important; border-radius: 999px !important; box-shadow: none !important; font-family: var(--body) !important; font-weight: 700 !important; text-transform: none !important; letter-spacing: 0 !important; font-size: 14px !important; }
+.tab > * { transform: none !important; }
+.tab.active { box-shadow: none !important; }
+.chip, .ghost, .cta, .rbtn, .follow-btn, .pill-today, .nav-btn { transform: none !important; box-shadow: none !important; }
+.nav-label { font: 700 18px var(--body) !important; text-transform: capitalize !important; letter-spacing: 0 !important; }
+
+/* ---------- barre latérale ---------- */
+.sidebar { background: var(--bg-2) !important; backdrop-filter: none !important; }
+.league-item:hover { transform: none !important; }
+.league-item.active { background: var(--panel) !important; box-shadow: inset 2px 0 0 var(--accent) !important; }
+.league-item .ico svg { width: 18px; height: 18px; color: var(--muted); }
+.league-item.active .ico svg { color: var(--accent); }
+.group-title { font: 700 11px var(--body) !important; letter-spacing: 1.6px !important; color: var(--dim) !important; opacity: 1 !important; text-transform: uppercase; }
+.group-title svg { width: 11px; height: 11px; vertical-align: -1px; color: var(--velo); }
+
+/* ---------- blocs de matchs : comme une page de résultats ---------- */
+.comp-block {
+  background: var(--panel) !important; border: 1px solid var(--line) !important; box-shadow: none !important;
+  border-radius: var(--radius) !important;
+}
+.comp-block::before { display: none !important; }
+.comp-head {
+  background: transparent !important; border-bottom: 1px solid var(--line) !important;
+  font: 700 13px var(--body) !important; letter-spacing: .4px !important; text-transform: none !important; color: var(--text);
+}
+.comp-head .cnt { color: var(--dim) !important; }
+.match { border-bottom: 1px solid var(--line-soft) !important; padding: 10px 16px !important; grid-template-columns: 64px 1fr 92px 1fr 22px !important; }
+.match:nth-child(even) { background: transparent !important; }
+.match:hover { background: color-mix(in srgb, var(--accent) 6%, transparent) !important; box-shadow: none !important; }
+.match .status { font: 600 13px var(--body) !important; letter-spacing: 0 !important; text-transform: none !important; color: var(--muted) !important; font-variant-numeric: tabular-nums; }
+.match .status.live { color: var(--live) !important; font-weight: 800 !important; }
+.match .status.pre { color: var(--text) !important; font-weight: 700 !important; }
+.team .tn { font-weight: 600 !important; }
+.team.win .tn { font-weight: 800 !important; }
+.team img { filter: none !important; width: 24px !important; height: 24px !important; }
+.score { gap: 0 !important; }
+.score .box {
+  transform: none !important; border: 0 !important; border-radius: 0 !important; background: transparent !important;
+  box-shadow: none !important; min-width: 28px !important; padding: 0 !important; font: 800 24px/1 var(--display) !important;
+}
+.score .box:first-child::after { content: "–"; margin: 0 4px; color: var(--dim); font-weight: 600; }
+.score.live .box { color: var(--live) !important; }
+.score.pre { font: 600 15px var(--body) !important; color: var(--dim) !important; letter-spacing: 0 !important; }
+
+/* ---------- en-tête du jour : une ligne de journal ---------- */
+.day-head { margin: 4px 0 22px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.day-head .kicker { font: 700 12px var(--body); letter-spacing: 1.8px; text-transform: uppercase; color: var(--accent); }
+.day-head h1 { margin: 6px 0 10px; font: 800 44px/1 var(--display); text-transform: uppercase; color: var(--chalk); }
+.day-head .lede { margin: 0; max-width: 720px; font: 400 19px/1.45 var(--serif); color: #c9cfd8; }
+.day-head .lede b { color: var(--text); font-weight: 600; }
+.day-head .lede .live-word { color: var(--live); font-weight: 600; }
+.day-nav { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.summary-row { display: none !important; }   /* les compteurs « 0 en direct » ne racontaient rien */
+
+/* bloc « en direct » : sobre, juste un point rouge qui respire */
+.live-block { border-color: color-mix(in srgb, var(--live) 45%, var(--line)) !important; box-shadow: none !important; }
+.live-block::before { display: none !important; }
+.live-head { background: transparent !important; color: var(--live) !important; }
+
+/* ---------- cartes et héros des autres pages : moins de fard ---------- */
+.stat, .bel-hero, .hero, .g-hero, .uefa-hero, .ps-hero, .table-wrap, .mpanel, .nt-card, .bel-row, .tcard, .rcard {
+  box-shadow: none !important;
+}
+.bel-hero, .hero, .g-hero { clip-path: none !important; border-radius: var(--radius) !important; }
+.gt-card, .mon-card, .champ-card { clip-path: none !important; }
+.uefa-star, .bel-flag { transform: none !important; }
+.stage-table .snum, .w-pulse, .tier, .price { transform: none !important; }
+.modal-card { background: var(--bg-2) !important; }
+.modal { background: rgba(6, 9, 13, .78) !important; backdrop-filter: blur(3px) !important; }
+.std tbody tr:nth-child(even) td, .race-table tbody tr:nth-child(even) td { background: transparent !important; }
+.std td, .race-table td { border-color: var(--line-soft) !important; }
+
+/* icônes maison */
+.i { display: inline-block; width: 1em; height: 1em; vertical-align: -.14em; flex: none; }
+.follow-btn .i { margin-right: 5px; }
+.tab .i, .chip .i { margin-right: 6px; }
+
+/* ---------- pied de page signé ---------- */
+.signature {
+  margin: 40px 0 12px; padding-top: 18px; border-top: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; justify-content: space-between;
+  color: var(--dim); font-size: 13px;
+}
+.signature em { font: italic 400 16px var(--serif); color: var(--muted); }
+
+/* écran d'ouverture plus calme */
+#splash { background: var(--bg) !important; }
+.sp-logo { filter: none !important; }
+.sp-word { transform: none !important; }
+.sp-word span { border-radius: 3px; }
+
+@media (max-width: 640px) {
+  .day-head h1 { font-size: 34px; }
+  .day-head .lede { font-size: 17px; }
+  .match { grid-template-columns: 1fr 76px 1fr 0 !important; padding: 10px 10px !important; }
+  .match .status { grid-column: 1 / -1; text-align: center; margin-bottom: -4px; }
+  .match .status:empty { display: none; }
+  .sport-btn { padding: 7px 11px !important; font-size: 13px !important; white-space: nowrap; }
+  .topbar { gap: 8px !important; }
+  .page-head h1 { font-size: 32px !important; }
+}
+
+/* signature en bas de chaque page */
+.main::after {
+  content: "Arena 360 · fait en Belgique, pour ceux qui regardent le foot le dimanche et le vélo en juillet.";
+  display: block; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line);
+  font: italic 400 15px var(--serif); color: var(--dim);
+}
+
+/* sélecteurs « saison / semaine », « vélo / foot » : un simple interrupteur */
+.gmode { background: var(--panel) !important; border: 1px solid var(--line) !important; border-radius: 999px !important; padding: 4px !important; gap: 4px !important; transform: none !important; box-shadow: none !important; }
+.gmode button { transform: none !important; border-radius: 999px !important; font: 700 14px var(--body) !important; letter-spacing: 0 !important; text-transform: none !important; box-shadow: none !important; clip-path: none !important; }
+.gmode button > * { transform: none !important; }
+.gmode button.on { background: var(--accent) !important; color: var(--on-accent) !important; }
+.bel-flag { height: 72px !important; }
+.bel-flag i { border-radius: 2px !important; }
+.bel-hero h1, .hero h1, .g-hero h1 { letter-spacing: 0 !important; }

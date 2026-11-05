@@ -375,7 +375,7 @@ function footHeroHTML(mine = null, changesLeft = FOOT.maxChanges) {
              <div class="phase open">Changements illimités jusqu'au 1er janvier</div>`
           : `<div class="countdown"><b>${mine ? mine.total : "–"}</b><span>points cette saison</span></div>
              <div class="phase open">${changesLeft} changement${changesLeft > 1 ? "s" : ""} d'équipe restant${changesLeft > 1 ? "s" : ""}</div>`}
-        <div class="mode">${ONLINE ? "🌐 Classement en ligne" : "💻 Mode local · ce PC"}</div>
+        <div class="mode">${ONLINE ? `${ico("online")} Classement en ligne` : "Mode local, sur ce PC"}</div>
       </div>
     </section>`;
 }
